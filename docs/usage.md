@@ -1,6 +1,6 @@
 # Usage and shortcuts
 
-Version: 1.4
+Version: 1.5
 Updated: 2026-10-27
 
 The library captures app identities and normalized window geometry. It does not
@@ -42,7 +42,10 @@ may need to be released before recording the replacement.
 
 An application-launch shortcut opens or brings its app forward. When that app is
 already frontmost, the same shortcut hides it; pressing again brings it back.
-This hides the application, not just one window, and does not quit it. Selecting
+Hide completion is verified from the observed hidden state across run-loop turns,
+not just the request return value. A hidden app takes the show path even if
+frontmost metadata has not caught up. This hides the application, not just one
+window, and does not quit it. Selecting
 an app in Applications search and the CLI `app-open` command always open/activate
 and never toggle hidden state.
 

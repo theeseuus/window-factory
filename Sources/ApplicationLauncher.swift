@@ -26,6 +26,8 @@ struct ApplicationOpening {
   }
   var frontmostPID: () -> Int32? = { NSWorkspace.shared.frontmostApplication?.processIdentifier }
   var hide: (NSRunningApplication) -> Bool = { $0.hide() }
+  var hidden: (NSRunningApplication) -> Bool = { $0.isHidden }
+  var pause: () async throws -> Void = { try await Task.sleep(for: .milliseconds(50)) }
   private func selectedRunningApp(_ entry: ApplicationEntry, url: URL) throws -> NSRunningApplication? {
     let applications = running(entry.bundleID)
     let selected = applications.first { $0.bundleURL?.standardizedFileURL == url.standardizedFileURL }
@@ -37,9 +39,18 @@ struct ApplicationOpening {
   }
   // Only an app-launch hotkey opts into hiding. Search and agent open remain explicit opens.
   func toggle(_ entry: ApplicationEntry, url: URL) async throws -> Bool {
-    if let selected = try selectedRunningApp(entry,url:url), selected.processIdentifier == frontmostPID() {
-      guard hide(selected) else { throw FactoryError("\(entry.name) could not be hidden.") }
-      return true
+    if let selected = try selectedRunningApp(entry,url:url), !hidden(selected),
+       selected.processIdentifier == frontmostPID() {
+      // Dispatch once, then observe the result across run-loop turns. Some macOS
+      // builds return false even though the app subsequently becomes hidden.
+      _ = hide(selected)
+      for _ in 0..<20 {
+        try Task.checkCancellation()
+        if hidden(selected) { return true }
+        try await pause()
+      }
+      if hidden(selected) { return true }
+      throw FactoryError("Could not confirm that \(entry.name) was hidden.")
     }
     _ = try await open(entry,url:url)
     return false

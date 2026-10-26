@@ -396,7 +396,7 @@ import AppKit
             let toggling = ApplicationOpening(running:{ _ in Array(repeating:currentProcess,count:processCount) },request:{ _,_ in opens += 1;return currentProcess },frontmostPID:{frontmost},hide:{ app in
                 check(app.processIdentifier == currentProcess.processIdentifier,"hide targets the selected app process")
                 hides += 1;return true
-            })
+            },hidden:{_ in hides>0})
             let hidden = try await toggling.toggle(openingEntry,url:appURL)
             let shouldHide = processCount == 1 && frontmost == currentProcess.processIdentifier
             check(hidden == shouldHide && hides == (shouldHide ? 1 : 0) && opens == (shouldHide ? 0 : 1),"hotkey hides only the frontmost target; stopped/background apps open once")
@@ -404,9 +404,22 @@ import AppKit
             check(opens == (shouldHide ? 1 : 2) && hides == (shouldHide ? 1 : 0),"explicit search/CLI open never hides even a frontmost app")
         }
         var refusedHideRequests = 0
-        let refusingHide = ApplicationOpening(running:{_ in [currentProcess]},request:{_,_ in refusedHideRequests += 1;return currentProcess},frontmostPID:{currentProcess.processIdentifier},hide:{_ in false})
+        let refusingHide = ApplicationOpening(running:{_ in [currentProcess]},request:{_,_ in refusedHideRequests += 1;return currentProcess},frontmostPID:{currentProcess.processIdentifier},hide:{_ in false},hidden:{_ in false},pause:{})
         do { _ = try await refusingHide.toggle(openingEntry,url:appURL);check(false,"failed hide must be reported") }
-        catch { check(refusedHideRequests == 0 && error.localizedDescription == "Fixture App could not be hidden.","failed hide never falls through into an open") }
+        catch { check(refusedHideRequests == 0 && error.localizedDescription == "Could not confirm that Fixture App was hidden.","failed hide never falls through into an open") }
+        var delayedHidden = false,delayedHides = 0,delayedOpens = 0,hidePolls = 0
+        let delayedToggle = ApplicationOpening(running:{_ in [currentProcess]},request:{_,_ in delayedOpens += 1;delayedHidden = false;return currentProcess},frontmostPID:{currentProcess.processIdentifier},hide:{_ in delayedHides += 1;return false},hidden:{_ in delayedHidden},pause:{hidePolls += 1;if hidePolls % 3 == 0 { delayedHidden = true }})
+        for _ in 0..<3 {
+            let didHide = try await delayedToggle.toggle(openingEntry,url:appURL)
+            check(didHide && delayedHidden,"false dispatch return is accepted only after delayed hidden observation")
+            let didHideAgain = try await delayedToggle.toggle(openingEntry,url:appURL)
+            check(!didHideAgain && !delayedHidden,"a hidden target opens even when frontmost metadata still names its PID")
+        }
+        check(delayedHides == 3 && delayedOpens == 3 && hidePolls == 9,"repeated hide/show dispatches exactly once per press")
+        var misleadingHideRequests = 0
+        let misleadingHide = ApplicationOpening(running:{_ in [currentProcess]},request:{_,_ in misleadingHideRequests += 1;return currentProcess},frontmostPID:{currentProcess.processIdentifier},hide:{_ in true},hidden:{_ in false},pause:{})
+        do { _ = try await misleadingHide.toggle(openingEntry,url:appURL);check(false,"dispatch success alone must not establish hide success") }
+        catch { check(misleadingHideRequests == 0,"unconfirmed hide remains a bounded failure without a second operation") }
         reference.stop()
         settings.stop()
         print("native switcher panel: \(assertions) assertions passed; no windows shown or controlled")
