@@ -11,6 +11,7 @@ final class SpaceIndicator: NSObject, NSMenuDelegate, NSMenuItemValidation {
     var active: Bool { item != nil }
     var lastResult = "Menu-bar Space indicator is disabled."
     var changed: (() -> Void)?
+    var systemMenu: (()->NSMenu)?
     var openLibrary: (() -> Void)?
     var openSettings: (() -> Void)?
     var tilingChord: (()->ShortcutChord?)?
@@ -58,7 +59,12 @@ final class SpaceIndicator: NSObject, NSMenuDelegate, NSMenuItemValidation {
             entry.toolTip = chord.actionHint
         }
     }
-    func refreshMenuShortcuts() { if let menu = item?.menu { Self.updateShortcuts(in:menu,preferences:preferences);if let entry=menu.items.first(where:{$0.identifier?.rawValue == "tiling"}){MenuShortcut.apply(tilingChord?(),to:entry)};if let entry=menu.items.first(where:{$0.identifier?.rawValue == "codex.new-window"}){MenuShortcut.apply(newCodexChord?(),to:entry)} } }
+    func refreshMenuShortcuts() { if let menu = item?.menu {
+        if let systemMenu {
+            if let entry=menu.items.first(where:{$0.identifier?.rawValue == "system"}) {entry.submenu=systemMenu()}
+            else {let entry=NSMenuItem(title:"System Commands",action:nil,keyEquivalent:"");entry.identifier=NSUserInterfaceItemIdentifier("system");entry.submenu=systemMenu();menu.insertItem(entry,at:max(0,menu.items.count-2))}
+        }
+ Self.updateShortcuts(in:menu,preferences:preferences);if let entry=menu.items.first(where:{$0.identifier?.rawValue == "tiling"}){MenuShortcut.apply(tilingChord?(),to:entry)};if let entry=menu.items.first(where:{$0.identifier?.rawValue == "codex.new-window"}){MenuShortcut.apply(newCodexChord?(),to:entry)} } }
     func validateMenuItem(_ menuItem: NSMenuItem)->Bool { menuItem.identifier?.rawValue == "codex.new-window" ? newCodexAvailable?() == true : true }
     func menuNeedsUpdate(_ menu: NSMenu) { refreshMenuShortcuts();menu.items.first{$0.identifier?.rawValue == "codex.new-window"}?.isEnabled = newCodexAvailable?() == true }
     private func observe(_ center: NotificationCenter,_ name: Notification.Name) {

@@ -1,6 +1,6 @@
 # Usage and shortcuts
 
-Version: 1.5
+Version: 1.6
 Updated: 2026-10-27
 
 The library captures app identities and normalized window geometry. It does not
@@ -70,3 +70,24 @@ General Settings owns Agent access, Dock visibility, login startup and Accessibi
 status. The app cannot grant its own permissions. Agent access is off by default
 and explicitly authorizes same-user processes; it is not an agent identity system.
 See [the CLI reference](../CLI.md) before using mutation commands.
+
+## System Commands
+
+Settings → Shortcuts → System Commands contains Emoji & Symbols, Search Files,
+Keyboard Viewer and Sleep. All start unassigned. They use the existing recorder,
+clash checks and group enable switch. The menu-bar and application menus also
+provide these actions, and Keyboard Shortcuts shows the current assignments.
+
+These commands use macOS directly. Emoji & Symbols opens Character Viewer.
+Search Files invokes the native Option+Command+Space Finder-search shortcut after
+held modifiers are released; that macOS shortcut must remain enabled. Keyboard
+Viewer uses its native app where available, otherwise the Input menu through
+existing Accessibility access. The current input-menu fallback requires English
+menu titles and the Input menu enabled in Keyboard settings. It does not change
+input sources or enable that menu automatically. Sleep sends a fixed system sleep
+request; it is not display-only sleep, Lock Screen or Quit.
+
+No launcher extension or third-party app is needed. Release an old assignment in
+another shortcut owner before recording the same chord here. System actions are
+not exposed through Agent access. Sleep is tested only through injected effects;
+a live sleep/wake check is owner-controlled.

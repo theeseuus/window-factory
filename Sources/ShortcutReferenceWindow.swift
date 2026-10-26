@@ -7,6 +7,7 @@ final class ShortcutReferenceWindow: NSObject {
     private let text = NSTextView()
     private let restore = NSButton(title:"Restore last stashed window",target:nil,action:nil)
     var optionalCommands: [OptionalCommandShortcut] = []
+    var systemCommands: SystemCommands?
     weak var launcher: LauncherControls?
     weak var spaceIndicator: SpaceIndicator?
     weak var spaceMove: DirectSpaceMoveControls?
@@ -46,7 +47,7 @@ final class ShortcutReferenceWindow: NSObject {
     }
     var applications: ApplicationLauncher?
     func refresh() {
-        let states: [ShortcutGroup:Bool] = [.geometry:geometry?.active == true,.focus:focus?.active == true,.stash:stash?.active == true,.switcher:switcher?.active == true,.accordion:accordion?.active == true,.spaces:spaceMove?.active == true,.library:launcher?.active == true]
+        let states: [ShortcutGroup:Bool] = [.geometry:geometry?.active == true,.focus:focus?.active == true,.stash:stash?.active == true,.switcher:switcher?.active == true,.accordion:accordion?.active == true,.spaces:spaceMove?.active == true,.library:launcher?.active == true,.system:systemCommands?.active == true]
         func row(_ modifiers: String,_ key: String,_ action: String) -> String {
             "\t"+modifiers+"\t"+key+"\t"+action
         }

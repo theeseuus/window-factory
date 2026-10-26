@@ -82,11 +82,17 @@ int main(void) {
     UInt32 tilingResult=0;
     assert(WFConfigureApplicationHotKey(66,32,mods[0],YES,commandInvoke,&tilingResult,&appRollback)==noErr);
     wfAppKeys[66].callback(66,wfAppKeys[66].context);assert(tilingResult==66 && commandResult==65);
+    UInt32 systemResult=0;
+    for(UInt32 slot=67;slot<=70;slot++) {
+        assert(WFConfigureApplicationHotKey(slot,90+slot-67,mods[0],YES,commandInvoke,&systemResult,&appRollback)==noErr);
+        wfAppKeys[slot].callback(slot,wfAppKeys[slot].context);assert(systemResult==slot);
+        assert(wfAppKeys[65].ref && wfAppKeys[66].ref && reference);
+    }
     blockedKey=82;
     assert(WFConfigureApplicationHotKey(65,82,mods[0],YES,commandInvoke,&commandResult,&appRollback)!=noErr && appRollback==0);
     assert(fake[(uintptr_t)wfAppKeys[65].ref].key==16 && wfAppKeys[1].ref);
     blockedKey=-1;
-    assert(WFConfigureApplicationHotKey(67,0,mods[0],YES,appInvoke,&captured,&appRollback)==paramErr);
+    assert(WFConfigureApplicationHotKey(71,0,mods[0],YES,appInvoke,&captured,&appRollback)==paramErr);
     assert(WFConfigureApplicationHotKey(65,16,mods[0],NO,commandInvoke,&commandResult,&appRollback)==noErr);
     assert(wfAppKeys[1].ref && wfAppKeys[66].ref && reference);
     assert(WFConfigureApplicationHotKey(1,17,mods[0],NO,appInvoke,&captured,&appRollback)==noErr);

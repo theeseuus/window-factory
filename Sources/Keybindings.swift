@@ -28,13 +28,13 @@ struct ShortcutChord: Codable,Equatable,Hashable {
     }
 }
 enum ShortcutGroup: String,CaseIterable,Codable {
-    case geometry,focus,stash,switcher,accordion,spaces,library
+    case geometry,focus,stash,switcher,accordion,spaces,library,system
     var title: String {
-        switch self { case .geometry:"Geometry"; case .focus:"Focus"; case .stash:"Stash"; case .switcher:"Switcher"; case .accordion:"Accordion"; case .spaces:"Spaces"; case .library:"Library" }
+        switch self { case .geometry:"Geometry"; case .focus:"Focus"; case .stash:"Stash"; case .switcher:"Switcher"; case .accordion:"Accordion"; case .spaces:"Spaces"; case .library:"Library"; case .system:"System Commands" }
     }
     var signature: UInt32 {
         let value: String
-        switch self { case .geometry:value="WFGC"; case .focus:value="WFFC"; case .stash:value="WFST"; case .switcher:value="WFSW"; case .accordion:value="WFAC"; case .spaces:value="WFSM"; case .library:value="WFLA" }
+        switch self { case .geometry:value="WFGC"; case .focus:value="WFFC"; case .stash:value="WFST"; case .switcher:value="WFSW"; case .accordion:value="WFAC"; case .spaces:value="WFSM"; case .library:value="WFLA"; case .system:value="WFSY" }
         return value.utf8.reduce(UInt32(0)){($0<<8)|UInt32($1)}
     }
 }

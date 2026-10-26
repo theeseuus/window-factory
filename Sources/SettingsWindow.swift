@@ -7,7 +7,11 @@ final class FactoryPreferences {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         shortcuts = KeybindingStore(defaults:defaults)
-        defaults.register(defaults:["showShortcutHints":true,"keepLibraryOnTop":false,"launcherEnabled":true,"showDockIcon":true])
+        defaults.register(defaults:["showShortcutHints":true,"keepLibraryOnTop":false,"launcherEnabled":true,"showDockIcon":true,"systemCommandsEnabled":true])
+    }
+    var systemCommandsEnabled: Bool {
+        get { defaults.bool(forKey:"systemCommandsEnabled") }
+        set { defaults.set(newValue,forKey:"systemCommandsEnabled") }
     }
     var layoutOrder: [String] {
         get { defaults.stringArray(forKey:"layoutOrder.v1") ?? [] }
@@ -145,6 +149,7 @@ final class ShortcutEditor: NSObject,NSTableViewDataSource,NSTableViewDelegate {
 
 @MainActor
 final class SettingsWindow: NSObject,NSWindowDelegate,NSTabViewDelegate {
+    var systemCommands: SystemCommands?
     let window: NSWindow
     let preferences: FactoryPreferences
     let store: LayoutStore
@@ -223,7 +228,7 @@ final class SettingsWindow: NSObject,NSWindowDelegate,NSTabViewDelegate {
     private func addTab(_ title: String,_ view: NSView) { let item = NSTabViewItem(identifier:title); item.label = title; item.view = view; tabs.addTabViewItem(item) }
     func tabView(_ tabView: NSTabView,didSelect tabViewItem: NSTabViewItem?) { shortcutEditor.cancelRecording(); refresh() }
     private func groupEnabled(_ group: ShortcutGroup) -> Bool {
-        switch group { case .geometry:geometry?.active == true; case .focus:focus?.active == true; case .stash:stash?.active == true; case .switcher:switcher?.active == true; case .accordion:accordion?.active == true; case .spaces:spaceMove?.active == true; case .library:launcher?.active == true }
+        switch group { case .geometry:geometry?.active == true; case .focus:focus?.active == true; case .stash:stash?.active == true; case .switcher:switcher?.active == true; case .accordion:accordion?.active == true; case .spaces:spaceMove?.active == true; case .library:launcher?.active == true; case .system:systemCommands?.active == true }
     }
     private func changeGroup(_ group: ShortcutGroup,enabled: Bool) {
         do {
@@ -235,6 +240,7 @@ final class SettingsWindow: NSObject,NSWindowDelegate,NSTabViewDelegate {
             case .accordion: if enabled { try accordion?.enable() } else { accordion?.disable() }
             case .spaces: if enabled { try spaceMove?.enable() } else { spaceMove?.disable() }
             case .library: if enabled { try launcher?.enable() } else { launcher?.disable() }
+            case .system: try systemCommands?.setEnabled(enabled)
             }
         } catch { let alert = NSAlert(); alert.messageText = "\(group.title) could not be enabled"; alert.informativeText = error.localizedDescription; alert.beginSheetModal(for:window) }
         refresh()

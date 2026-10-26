@@ -5,8 +5,8 @@ struct OptionalShortcutEnvelope: Codable {
   let chord: ShortcutChord
 }
 
-enum OptionalCommand: CaseIterable {
-  case newCodexWindow, tilingControls
+enum OptionalCommand: String, CaseIterable {
+  case newCodexWindow, tilingControls, emoji, fileSearch, keyboardViewer, sleep
   var definition: ShortcutDefinition {
     switch self {
     case .newCodexWindow:
@@ -17,12 +17,20 @@ enum OptionalCommand: CaseIterable {
       return ShortcutDefinition(
         id: "tiling.controls", title: "Open / close Tiling controls", group: .library, index: 3,
         standard: ShortcutChord(key: 35, modifiers: ShortcutChord.hyper, name: "P"))
+    case .emoji: return ShortcutDefinition(id:"system.emoji",title:"Emoji & Symbols",group:.system,index:0,standard:ShortcutChord(key:106,modifiers:0,name:"F16"))
+    case .fileSearch: return ShortcutDefinition(id:"system.file-search",title:"Search Files",group:.system,index:1,standard:ShortcutChord(key:3,modifiers:ShortcutChord.control|ShortcutChord.option,name:"F"))
+    case .keyboardViewer: return ShortcutDefinition(id:"system.keyboard-viewer",title:"Keyboard Viewer",group:.system,index:2,standard:ShortcutChord(key:40,modifiers:ShortcutChord.control|ShortcutChord.option,name:"K"))
+    case .sleep: return ShortcutDefinition(id:"system.sleep",title:"Sleep",group:.system,index:3,standard:ShortcutChord(key:1,modifiers:ShortcutChord.control|ShortcutChord.option,name:"S"))
     }
   }
   var preference: String {
-    self == .newCodexWindow ? "codexNewWindowShortcut.v1" : "tilingControlsShortcut.v1"
+    switch self {
+    case .newCodexWindow: "codexNewWindowShortcut.v1"
+    case .tilingControls: "tilingControlsShortcut.v1"
+    default: "systemCommand.\(rawValue).v1"
+    }
   }
-  var slot: UInt32 { self == .newCodexWindow ? 65 : 66 }
+  var slot: UInt32 { UInt32(Self.allCases.firstIndex(of:self)!) + 65 }
 }
 
 // Optional commands keep independent registrations and no assigned default chords.

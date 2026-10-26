@@ -420,6 +420,49 @@ import AppKit
         let misleadingHide = ApplicationOpening(running:{_ in [currentProcess]},request:{_,_ in misleadingHideRequests += 1;return currentProcess},frontmostPID:{currentProcess.processIdentifier},hide:{_ in true},hidden:{_ in false},pause:{})
         do { _ = try await misleadingHide.toggle(openingEntry,url:appURL);check(false,"dispatch success alone must not establish hide success") }
         catch { check(misleadingHideRequests == 0,"unconfirmed hide remains a bounded failure without a second operation") }
+        let systemSuite="WindowFactory.SystemCommandsTest.\(UUID().uuidString)"
+        let isolatedSystemDefaults=UserDefaults(suiteName:systemSuite)!
+        defer {isolatedSystemDefaults.removePersistentDomain(forName:systemSuite)}
+        let systemPreferences=FactoryPreferences(defaults:isolatedSystemDefaults)
+        var systemActions: [OptionalCommand]=[]
+        let system=SystemCommands(preferences:systemPreferences,store:systemPreferences.shortcuts,defaults:isolatedSystemDefaults,backend:SystemCommandBackend(perform:{systemActions.append($0)}),live:false,others:{[]})
+        check(system.shortcuts.map{ $0.command } == [.emoji,.fileSearch,.keyboardViewer,.sleep],"four native commands have independent owners")
+        check(system.shortcuts.allSatisfy{$0.chord == nil && !$0.active},"new system commands never claim shortcuts implicitly")
+        try system.restorePreference()
+        check(system.active && systemActions.isEmpty,"enabling the group does not dispatch actions, especially Sleep")
+        let emojiKey=system.shortcuts.first{$0.command == .emoji}!,fileKey=system.shortcuts.first{$0.command == .fileSearch}!
+        let f16=ShortcutChord(key:106,modifiers:0,name:"F16")
+        try emojiKey.set(f16)
+        do {try fileKey.set(f16);check(false,"system shortcut collision must fail")}catch{check(fileKey.chord == nil,"system commands share collision checks and preserve old assignment")}
+        do {try fileKey.set(ShortcutDefinition.all[0].standard);check(false,"window-control collision must fail")}catch{check(fileKey.chord == nil,"system commands cannot claim existing geometry bindings")}
+        let systemMenu=system.makeMenu()
+        check(systemMenu.items.map(\.title) == ["Emoji & Symbols","Search Files","Keyboard Viewer","Sleep"],"native actions are available without a keyboard assignment")
+        check(systemMenu.items[0].keyEquivalent == f16.menuKeyEquivalent && systemMenu.items[0].toolTip == "F16","system menu displays the saved shortcut")
+        try system.setEnabled(false)
+        check(!system.active && system.shortcuts.allSatisfy{!$0.active} && emojiKey.chord == f16,"group toggle releases only system shortcuts while retaining their assignments")
+        check(systemPreferences.launcherEnabled,"system toggle does not disable the library launcher")
+        try system.setEnabled(true)
+        check(emojiKey.active,"group re-enable restores its saved binding")
+        reference.systemCommands=system;reference.optionalCommands=system.shortcuts;reference.refresh()
+        check(referenceText.string.contains("SYSTEM COMMANDS  [On]") && referenceText.string.contains("Keyboard Viewer"),"shortcut reference includes native command state and rows")
+        settings.systemCommands=system;settings.shortcutEditor.optionalCommands=system.shortcuts
+        settings.shortcutEditor.groups.selectItem(withTitle:"System Commands")
+        _ = NSApp.sendAction(settings.shortcutEditor.groups.action!,to:settings.shortcutEditor.groups.target,from:settings.shortcutEditor.groups)
+        check(allViews(settings.shortcutEditor.view).compactMap{$0 as? NSTableView}.first?.numberOfRows == 4,"System Commands is a separate settings group with four recorder rows")
+        system.run(.sleep)
+        for _ in 0..<20 where system.isBusy {await Task.yield()}
+        check(systemActions == [.sleep] && !system.isBusy,"Sleep routes only to the injected fixture backend during tests")
+        system.blocked={true};system.run(.emoji)
+        check(systemActions == [.sleep],"blocked operations never dispatch a system action")
+        var searchPosts=0,modifierPauses=0
+        let nativeSearch=NativeFileSearch(allowed:{true},modifiersHeld:{modifierPauses<3},post:{searchPosts += 1},pause:{modifierPauses += 1})
+        try await nativeSearch.show()
+        check(searchPosts == 1 && modifierPauses == 3,"Finder search waits for physical modifiers to release then dispatches once")
+        let deniedSearch=NativeFileSearch(allowed:{false},modifiersHeld:{false},post:{searchPosts += 1},pause:{})
+        do {try await deniedSearch.show();check(false,"untrusted event dispatch must fail")}catch{check(searchPosts == 1,"missing access never posts input or requests permission")}
+        let heldSearch=NativeFileSearch(allowed:{true},modifiersHeld:{true},post:{searchPosts += 1},pause:{})
+        do {try await heldSearch.show();check(false,"held modifiers must time out")}catch{check(searchPosts == 1,"held shortcut cannot cause duplicate or delayed search input")}
+        system.stop()
         reference.stop()
         settings.stop()
         print("native switcher panel: \(assertions) assertions passed; no windows shown or controlled")
