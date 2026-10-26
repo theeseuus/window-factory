@@ -1,6 +1,23 @@
 import AppKit
 import UniformTypeIdentifiers
 
+enum ApplicationListOrder {
+    static func sorted(_ entries: [ApplicationEntry],column: String = "app",ascending: Bool = true) -> [ApplicationEntry] {
+        entries.sorted { a,b in
+            let order: ComparisonResult
+            switch column {
+            case "enabled": order = a.enabled == b.enabled ? .orderedSame : (a.enabled ? .orderedDescending : .orderedAscending)
+            case "key": order = (a.shortcut != nil) == (b.shortcut != nil) ? .orderedSame : (a.shortcut != nil ? .orderedDescending : .orderedAscending)
+            default: order = a.name.localizedStandardCompare(b.name)
+            }
+            if order != .orderedSame { return ascending ? order == .orderedAscending : order == .orderedDescending }
+            let name = a.name.localizedStandardCompare(b.name)
+            if name != .orderedSame { return name == .orderedAscending }
+            return a.id.uuidString < b.id.uuidString
+        }
+    }
+}
+
 @MainActor
 final class ApplicationsWindow: NSObject,NSTableViewDataSource,NSTableViewDelegate,NSWindowDelegate,NSSearchFieldDelegate {
     let window: NSWindow
@@ -69,11 +86,14 @@ final class ApplicationsEditor: NSObject,NSTableViewDataSource,NSTableViewDelega
     let view=NSView(),table=NSTableView()
     private var launcher: ApplicationLauncher?
     private var recorders: [ShortcutRecorder]=[]
+    private(set) var displayedEntries: [ApplicationEntry]=[]
+    private var selectedEntry: ApplicationEntry? { displayedEntries.indices.contains(table.selectedRow) ? displayedEntries[table.selectedRow] : nil }
     private let message=NSTextField(wrappingLabelWithString:"")
     override init(){
         super.init()
-        for (id,title,width) in [("app","Application",240.0),("key","Shortcut",180.0),("enabled","Enabled",64.0)]{let c=NSTableColumn(identifier:NSUserInterfaceItemIdentifier(id));c.title=title;c.width=width;table.addTableColumn(c)}
+        for (id,title,width) in [("app","Application",240.0),("key","Shortcut",180.0),("enabled","Enabled",64.0)]{let c=NSTableColumn(identifier:NSUserInterfaceItemIdentifier(id));c.title=title;c.width=width;c.sortDescriptorPrototype=NSSortDescriptor(key:id,ascending:id == "app");table.addTableColumn(c)}
         table.rowHeight=40;table.dataSource=self;table.delegate=self
+        table.sortDescriptors=[NSSortDescriptor(key:"app",ascending:true)]
         let scroll=NSScrollView();scroll.documentView=table;scroll.hasVerticalScroller=true
         let add=NSButton(title:"Add Application…",target:self,action:#selector(addApplication)),remove=NSButton(title:"Remove",target:self,action:#selector(removeApplication)),clear=NSButton(title:"Clear Shortcut",target:self,action:#selector(clearShortcut))
         for button in [add,remove,clear]{button.bezelStyle = .rounded}
@@ -83,10 +103,18 @@ final class ApplicationsEditor: NSObject,NSTableViewDataSource,NSTableViewDelega
         message.font = .systemFont(ofSize:12);message.textColor = .secondaryLabelColor
     }
     func connect(_ launcher: ApplicationLauncher){self.launcher=launcher;refresh()}
-    func refresh(){guard ShortcutRecorder.current?.isRecording != true else{return};recorders=[];table.reloadData();message.stringValue=launcher?.loadError ?? launcher?.failures.values.sorted().joined(separator:"\n") ?? "";message.isHidden=message.stringValue.isEmpty}
-    func numberOfRows(in tableView: NSTableView)->Int{launcher?.entries.count ?? 0}
+    func refresh(){
+        guard ShortcutRecorder.current?.isRecording != true else{return}
+        let selectedID=selectedEntry?.id,sort=table.sortDescriptors.first
+        displayedEntries=ApplicationListOrder.sorted(launcher?.entries ?? [],column:sort?.key ?? "app",ascending:sort?.ascending ?? true)
+        recorders=[];table.reloadData();table.deselectAll(nil)
+        if let selectedID,let index=displayedEntries.firstIndex(where:{$0.id==selectedID}){table.selectRowIndexes(IndexSet(integer:index),byExtendingSelection:false)}
+        message.stringValue=launcher?.loadError ?? launcher?.failures.values.sorted().joined(separator:"\n") ?? "";message.isHidden=message.stringValue.isEmpty
+    }
+    func tableView(_ tableView: NSTableView,sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) { ShortcutRecorder.current?.cancel();refresh() }
+    func numberOfRows(in tableView: NSTableView)->Int{displayedEntries.count}
     func tableView(_ tableView: NSTableView,viewFor column: NSTableColumn?,row: Int)->NSView? {
-        guard let launcher else{return nil};let entry=launcher.entries[row]
+        guard let launcher,displayedEntries.indices.contains(row) else{return nil};let entry=displayedEntries[row]
         switch column?.identifier.rawValue {
         case "key":
             let definition=ShortcutDefinition(id:"application.\(entry.id)",title:"Launch \(entry.name)",group:.library,index:entry.slot,standard:entry.shortcut ?? ShortcutChord(key:0,modifiers:ShortcutChord.hyper,name:"A"))
@@ -100,7 +128,7 @@ final class ApplicationsEditor: NSObject,NSTableViewDataSource,NSTableViewDelega
     }
     private func run(_ operation: ()throws->Void){do{try operation();refresh()}catch{refresh();let alert=NSAlert();alert.messageText="Application shortcut not changed";alert.informativeText=error.localizedDescription;if let window=view.window{alert.beginSheetModal(for:window)}}}
     @objc private func addApplication(){guard launcher != nil else{return};let panel=NSOpenPanel();panel.allowedContentTypes=[.applicationBundle];panel.allowsMultipleSelection=false;panel.canChooseDirectories=false;if panel.runModal() == .OK,let url=panel.url{run{_ = try launcher?.add(url)}}}
-    @objc private func removeApplication(){guard let launcher,launcher.entries.indices.contains(table.selectedRow) else{return};let id=launcher.entries[table.selectedRow].id;run{try launcher.remove(id)}}
-    @objc private func clearShortcut(){guard let launcher,launcher.entries.indices.contains(table.selectedRow) else{return};let id=launcher.entries[table.selectedRow].id;run{try launcher.setShortcut(nil,id:id)}}
-    @objc private func toggleApplication(_ sender: NSSwitch){guard let launcher,launcher.entries.indices.contains(sender.tag) else{return};let id=launcher.entries[sender.tag].id;run{try launcher.setEnabled(sender.state == .on,id:id)}}
+    @objc private func removeApplication(){guard let launcher,let id=selectedEntry?.id else{return};run{try launcher.remove(id)}}
+    @objc private func clearShortcut(){guard let launcher,let id=selectedEntry?.id else{return};run{try launcher.setShortcut(nil,id:id)}}
+    @objc private func toggleApplication(_ sender: NSSwitch){guard let launcher,displayedEntries.indices.contains(sender.tag) else{return};let id=displayedEntries[sender.tag].id;run{try launcher.setEnabled(sender.state == .on,id:id)}}
 }

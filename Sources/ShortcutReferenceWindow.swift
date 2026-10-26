@@ -64,7 +64,7 @@ final class ShortcutReferenceWindow: NSObject {
             sections.append("\(group.title.uppercased())  [\(states[group] == true ? "On" : "Off")]\n"+shownRows.joined(separator:"\n"))
         }
         if let applications {
-            let rows = applications.entries.compactMap { entry -> String? in
+            let rows = ApplicationListOrder.sorted(applications.entries).compactMap { entry -> String? in
                 guard let chord=entry.shortcut else{return nil}
                 let state=applications.active.contains(entry.id) ? "" : " [Off]"
                 return row(chord.modifierLabel,chord.name,(entry.isSearch ? "Applications search" : "Open "+entry.name)+state)

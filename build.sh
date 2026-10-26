@@ -4,7 +4,7 @@ native_root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 # App bundles must stay outside the File Provider-managed source checkout.
 output=${WINDOW_FACTORY_BUILD_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/window-factory/build}
 . "$native_root/signing-config.sh"
-build_number=${WINDOW_FACTORY_BUILD_NUMBER:-49}
+build_number=${WINDOW_FACTORY_BUILD_NUMBER:-50}
 case "$build_number" in ''|*[!0-9]*) echo "Build number must be numeric" >&2; exit 1;; esac
 app="$output/Window Factory.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$output/ModuleCache"

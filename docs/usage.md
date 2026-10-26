@@ -1,6 +1,6 @@
 # Usage and shortcuts
 
-Version: 1.1
+Version: 1.3
 Updated: 2026-10-27
 
 The library captures app identities and normalized window geometry. It does not
@@ -40,8 +40,15 @@ app and Shift+F13 for a separate command). Other keys require Control, Option or
 Command. These use the same clash checks; an existing Raycast/system assignment
 may need to be released before recording the replacement.
 
+Click Applications settings column headings to sort by name, enabled state or
+whether a shortcut is assigned; click again to reverse. State groups use
+alphabetical order within each group. The shortcut reference lists application
+commands alphabetically. Sorting changes the view, not saved bindings.
+
 Application selection checks Window Factory clashes and failed OS registration;
-it cannot enumerate every chord owned by other remappers/apps.
+it cannot enumerate every chord owned by other remappers/apps. App opening uses
+macOS Launch Services for both running and stopped apps, allowing the app to
+handle activation/reopening without requesting a separate application instance.
 
 Tiling is explicitly enabled on one ordinary desktop/display. Its panel supports
 split resizing, axis changes, balance/swap, float/rejoin and pause/resume. Manual

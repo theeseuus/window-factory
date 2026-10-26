@@ -1,7 +1,7 @@
 import AppKit
 
 @main enum SwitcherPanelTests {
-    @MainActor static func main() throws {
+    @MainActor static func main() async throws {
         _ = NSApplication.shared
         let picker = WindowSwitcherPanel()
         let origin = SwitcherOrigin(pid:getpid(),windowID:nil,desktops:[])
@@ -329,6 +329,68 @@ import AppKit
         let invalidApps = ApplicationLauncher(defaults:appDefaults,shortcuts:appKeys,live:false)
         check(invalidApps.loadError != nil,"invalid app configuration is explicit")
         do {_ = try invalidApps.add(appURL);check(false,"invalid saved state must not be overwritten")}catch{check(appDefaults.data(forKey:"applicationLaunchers.v1") == Data("invalid".utf8),"corrupt app settings are preserved for recovery")}
+        let sortEntries = [
+            ApplicationEntry(id:UUID(),slot:1,bundleID:"local.fixture.zeta",name:"Zeta",path:appURL.path,enabled:false),
+            ApplicationEntry(id:UUID(),slot:2,bundleID:"local.fixture.beta",name:"beta",path:appURL.path,shortcut:shiftedF13,enabled:false),
+            ApplicationEntry(id:UUID(),slot:3,bundleID:"local.fixture.alpha",name:"Alpha",path:appURL.path,shortcut:bareF13,enabled:true)
+        ]
+        check(ApplicationListOrder.sorted(sortEntries).map(\.name) == ["Alpha","beta","Zeta"],"app names sort alphabetically")
+        check(ApplicationListOrder.sorted(sortEntries,column:"app",ascending:false).map(\.name) == ["Zeta","beta","Alpha"],"name sort reverses")
+        check(ApplicationListOrder.sorted(sortEntries,column:"enabled",ascending:false).map(\.name) == ["Alpha","beta","Zeta"],"enabled-first groups retain alphabetic ties")
+        check(ApplicationListOrder.sorted(sortEntries,column:"enabled",ascending:true).map(\.name) == ["beta","Zeta","Alpha"],"disabled-first reverses the state groups")
+        check(ApplicationListOrder.sorted(sortEntries,column:"key",ascending:false).map(\.name) == ["Alpha","beta","Zeta"],"assigned-first groups retain alphabetic ties")
+        check(ApplicationListOrder.sorted(sortEntries,column:"key",ascending:true).map(\.name) == ["Zeta","Alpha","beta"],"unassigned-first sorting")
+        let sortSuite = "WindowFactory.AppSortTest.\(UUID().uuidString)"
+        // Use an isolated domain; never read or write the production app catalog.
+        let isolatedSortDefaults = UserDefaults(suiteName:sortSuite)!
+        defer { isolatedSortDefaults.removePersistentDomain(forName:sortSuite) }
+        let sortData = try JSONEncoder().encode(ApplicationEnvelope(version:1,entries:sortEntries))
+        isolatedSortDefaults.set(sortData,forKey:"applicationLaunchers.v1")
+        let sortKeys = KeybindingStore(defaults:isolatedSortDefaults)
+        let sortLauncher = ApplicationLauncher(defaults:isolatedSortDefaults,shortcuts:sortKeys,live:false)
+        let editor = ApplicationsEditor();editor.connect(sortLauncher)
+        check(editor.displayedEntries.filter{!$0.isSearch}.map(\.name) == ["Alpha","beta","Zeta"],"editor defaults to name order")
+        let alphaID = sortEntries[2].id,betaID = sortEntries[1].id
+        editor.table.selectRowIndexes(IndexSet(integer:editor.displayedEntries.firstIndex{$0.id==alphaID}!),byExtendingSelection:false)
+        editor.table.sortDescriptors = [NSSortDescriptor(key:"enabled",ascending:true)];editor.refresh()
+        check(editor.displayedEntries[editor.table.selectedRow].id == alphaID,"sorting preserves selected app identity")
+        check(isolatedSortDefaults.data(forKey:"applicationLaunchers.v1") == sortData,"sorting never writes the binding catalog")
+        let betaRow = editor.displayedEntries.firstIndex{$0.id==betaID}!
+        let enabledColumn = editor.table.tableColumns.first{$0.identifier.rawValue == "enabled"}!
+        let enabledSwitch = editor.tableView(editor.table,viewFor:enabledColumn,row:betaRow) as! NSSwitch
+        enabledSwitch.state = .on
+        _ = NSApp.sendAction(enabledSwitch.action!,to:enabledSwitch.target,from:enabledSwitch)
+        check(sortLauncher.entries.first{$0.id==betaID}!.enabled && sortLauncher.entries.first{$0.id==alphaID}!.enabled,"sorted-row toggle edits the intended UUID")
+        reference.applications=sortLauncher;reference.refresh()
+        let alphaRange=(referenceText.string as NSString).range(of:"Open Alpha"),betaRange=(referenceText.string as NSString).range(of:"Open beta")
+        check(alphaRange.location != NSNotFound && alphaRange.location<betaRange.location,"shortcut reference alphabetizes app commands")
+        editor.table.selectRowIndexes(IndexSet(integer:editor.displayedEntries.firstIndex{$0.id==alphaID}!),byExtendingSelection:false)
+        _ = NSApp.sendAction(NSSelectorFromString("clearShortcut"),to:editor,from:nil)
+        check(sortLauncher.entries.first{$0.id==alphaID}!.shortcut == nil && sortLauncher.entries.first{$0.id==betaID}!.shortcut == shiftedF13,"clear shortcut follows selected UUID after sort/reload")
+        // Regression: running apps must receive the same Launch Services open
+        // request as cold apps, including app-owned reopen handling.
+        let currentProcess = NSRunningApplication.current
+        for processCount in [0,1] {
+            var requests = 0
+            let opening = ApplicationOpening(running:{ _ in Array(repeating:currentProcess,count:processCount) },request:{ url,configuration in
+                requests += 1
+                check(url == appURL,"opening preserves the selected application URL")
+                check(configuration.activates && !configuration.createsNewApplicationInstance && !configuration.hides,"open requests activation without extra process or hiding")
+                await Task.yield()
+                return currentProcess
+            })
+            let opened = try await opening.open(ApplicationEntry(id:UUID(),slot:1,bundleID:"local.fixture.launch",name:"Fixture App",path:appURL.path,enabled:false),url:appURL)
+            check(requests == 1 && opened.processIdentifier == currentProcess.processIdentifier,"cold/running apps both dispatch exactly one workspace request")
+        }
+        var ambiguousRequests = 0
+        let ambiguousOpening = ApplicationOpening(running:{ _ in [currentProcess,currentProcess] },request:{ _,_ in ambiguousRequests += 1;return currentProcess })
+        let openingEntry = ApplicationEntry(id:UUID(),slot:1,bundleID:"local.fixture.launch",name:"Fixture App",path:appURL.path,enabled:false)
+        do { _ = try await ambiguousOpening.open(openingEntry,url:appURL);check(false,"ambiguous app copies must be rejected") }
+        catch { check(ambiguousRequests == 0,"ambiguous copies never dispatch an open") }
+        var failedRequests = 0
+        let failedOpening = ApplicationOpening(running:{ _ in [currentProcess] },request:{ _,_ in failedRequests += 1;throw FactoryError("Fixture open failed") })
+        do { _ = try await failedOpening.open(openingEntry,url:appURL);check(false,"workspace failure must propagate") }
+        catch { check(failedRequests == 1 && error.localizedDescription == "Fixture open failed","workspace errors propagate without duplicate retries") }
         reference.stop()
         settings.stop()
         print("native switcher panel: \(assertions) assertions passed; no windows shown or controlled")

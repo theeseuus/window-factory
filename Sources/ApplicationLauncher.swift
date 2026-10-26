@@ -13,11 +13,37 @@ struct ApplicationEnvelope: Codable {
   let entries: [ApplicationEntry]
 }
 
+// Launch Services owns the cooperative activation/reopen handoff for both
+// running and stopped apps. Injected requests let tests exercise both routes
+// without launching apps or changing desktop focus.
+@MainActor
+struct ApplicationOpening {
+  var running: (String) -> [NSRunningApplication] = {
+    NSRunningApplication.runningApplications(withBundleIdentifier: $0).filter { !$0.isTerminated }
+  }
+  var request: (URL, NSWorkspace.OpenConfiguration) async throws -> NSRunningApplication = {
+    try await NSWorkspace.shared.openApplication(at: $0, configuration: $1)
+  }
+  func open(_ entry: ApplicationEntry, url: URL) async throws -> NSRunningApplication {
+    let applications = running(entry.bundleID)
+    let selected = applications.first { $0.bundleURL?.standardizedFileURL == url.standardizedFileURL }
+      ?? (applications.count == 1 ? applications.first : nil)
+    guard applications.isEmpty || selected != nil else {
+      throw FactoryError("Multiple copies of \(entry.name) are running. Select the intended app first.")
+    }
+    let configuration = NSWorkspace.OpenConfiguration()
+    configuration.activates = true
+    configuration.createsNewApplicationInstance = false
+    return try await request(url, configuration)
+  }
+}
+
 @MainActor
 final class ApplicationLauncher {
   private let defaults: UserDefaults
   private let shortcuts: KeybindingStore
   private let live: Bool
+  private let opening: ApplicationOpening
   private(set) var entries: [ApplicationEntry] = []
   private(set) var active: Set<UUID> = []
   private(set) var failures: [UUID: String] = [:]
@@ -29,10 +55,12 @@ final class ApplicationLauncher {
   var blocked: () -> Bool = { false }
   private(set) var isLaunching = false
   private(set) var lastResult = ""
-  init(defaults: UserDefaults = .standard, shortcuts: KeybindingStore, live: Bool = true) {
+  init(defaults: UserDefaults = .standard, shortcuts: KeybindingStore, live: Bool = true,
+       opening: ApplicationOpening = ApplicationOpening()) {
     self.defaults = defaults
     self.shortcuts = shortcuts
     self.live = live
+    self.opening = opening
     if let data = defaults.data(forKey: "applicationLaunchers.v1") {
       do {
         let value = try JSONDecoder().decode(ApplicationEnvelope.self, from: data)
@@ -233,26 +261,9 @@ final class ApplicationLauncher {
     }
   }
   private func open(_ entry: ApplicationEntry, url: URL) async throws -> NSRunningApplication {
-    let running = NSRunningApplication.runningApplications(withBundleIdentifier: entry.bundleID)
-      .filter { !$0.isTerminated }
-    if let app = running.first(where: {
-      $0.bundleURL?.standardizedFileURL == url.standardizedFileURL
-    }) ?? (running.count == 1 ? running.first : nil) {
-      guard app.activate(options: []) else {
-        throw FactoryError("\(entry.name) refused activation.")
-      }
-      return app
-    } else {
-      guard running.isEmpty else {
-        throw FactoryError(
-          "Multiple copies of \(entry.name) are running. Select the intended app first.")
-      }
-      let configuration = NSWorkspace.OpenConfiguration()
-      configuration.activates = true
-      configuration.createsNewApplicationInstance = false
-      return try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
-    }
+    try await opening.open(entry, url: url)
   }
+
   func forAgent(_ bundleID: String) async throws -> Int32 {
     guard live, !isLaunching, TilingEvents.allowed(bundleID),
       bundleID != Bundle.main.bundleIdentifier
