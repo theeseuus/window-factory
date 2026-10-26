@@ -9,7 +9,7 @@ struct ShortcutChord: Codable,Equatable,Hashable {
     static let hyper = command|option|control
     var identity: String { "\(key):\(modifiers)" }
     var modifierLabel: String {
-        (modifiers&Self.control != 0 ? "⌃" : "") + (modifiers&Self.option != 0 ? "⌥" : "") + 
+        (modifiers&Self.control != 0 ? "⌃" : "") + (modifiers&Self.option != 0 ? "⌥" : "") +
         (modifiers&Self.shift != 0 ? "⇧" : "") + (modifiers&Self.command != 0 ? "⌘" : "")
     }
     var label: String { modifierLabel + " " + name }

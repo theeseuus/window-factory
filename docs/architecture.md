@@ -23,7 +23,9 @@ other user windows merely to make a test pass.
 The standalone split preserves the working source from window-management's native
 branch. The root source history begins cleanly here; historical machine-specific
 pilot records remain outside this repository. CHANGELOG records the scoped
-acceptance carried forward. No Hammerspoon runtime is required by this application.
+acceptance carried forward. No Hammerspoon runtime is required by this application. The old live-pilot runner
+that required an external experimental bridge stays in the original development
+branch; it is not a standalone tool.
 
 Tests cover pure geometry, matching, store recovery, controller state machines,
 AppKit presentation, hotkey registry rules, socket/jobs and installer guards.

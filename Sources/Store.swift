@@ -53,4 +53,3 @@ final class LayoutStore {
         try replace(copy)
     }
 }
-
