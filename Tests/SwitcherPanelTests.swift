@@ -214,6 +214,27 @@ import AppKit
         check(rejects([library.id:ShortcutChord(key:15,modifiers:ShortcutChord.hyper|ShortcutChord.shift,name:"R")]),"Hammerspoon fallback reserved")
         check(rejects([library.id:ShortcutChord(key:124,modifiers:ShortcutChord.control,name:"→")]),"macOS desktop navigation reserved")
         check(rejects(["unknown":custom]),"unknown command rejected")
+        for (key,name) in ShortcutChord.functionKeys {
+            for modifiers in [UInt32(0),ShortcutChord.shift] {
+                let function = ShortcutChord(key:key,modifiers:modifiers,name:name)
+                try shortcutStore.save([library.id:function])
+                check(KeybindingStore(defaults:dockDefaults).chord(library) == function,"function-key modifier variants survive reload")
+            }
+        }
+        for key in [UInt32(0),18,36,48,49,51,53,76,115,123] {
+            for modifiers in [UInt32(0),ShortcutChord.shift] {
+                check(rejects([library.id:ShortcutChord(key:key,modifiers:modifiers,name:"F13")]),"ordinary key cannot bypass modifier protection with a function-key label")
+            }
+        }
+        let bareF13 = ShortcutChord(key:105,modifiers:0,name:"F13")
+        let shiftedF13 = ShortcutChord(key:105,modifiers:ShortcutChord.shift,name:"F13")
+        check(bareF13.label == "F13" && shiftedF13.label == "⇧ F13","function-key captions have no stray leading space")
+        try ShortcutValidation.validate([library.id:bareF13],additional:[("New window",shiftedF13)])
+        do {
+            try ShortcutValidation.validate([library.id:bareF13],additional:[("App launch",bareF13)])
+            check(false,"function-key collision must fail")
+        } catch { check(true,"function-key collisions share existing validation") }
+
         try shortcutStore.save([:])
         check(KeybindingStore(defaults:dockDefaults).chord(library) == library.standard,"reset restores defaults")
         dockDefaults.set(Data("invalid".utf8),forKey:"shortcutOverrides.v1")

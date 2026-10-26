@@ -1,7 +1,7 @@
 # Usage and shortcuts
 
-Version: 1.0
-Updated: 2026-10-26
+Version: 1.1
+Updated: 2026-10-27
 
 The library captures app identities and normalized window geometry. It does not
 capture window titles, URLs, document paths or application contents. Restore uses
@@ -35,6 +35,11 @@ the same command. Settings toggles act on the selected shortcut group.
 Applications search, app launching, New Codex Window and Tiling controls have
 configurable optional bindings. Personal assigned bindings are not universal
 defaults; use the live Keyboard Shortcuts window to see the actual configuration.
+F1–F20 can be recorded on their own or with Shift (for example F13 to open an
+app and Shift+F13 for a separate command). Other keys require Control, Option or
+Command. These use the same clash checks; an existing Raycast/system assignment
+may need to be released before recording the replacement.
+
 Application selection checks Window Factory clashes and failed OS registration;
 it cannot enumerate every chord owned by other remappers/apps.
 
