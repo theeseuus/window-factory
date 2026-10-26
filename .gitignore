@@ -1,0 +1,10 @@
+.build/
+.DS_Store
+._*
+*.log
+signing.local.sh
+mise.local.toml
+.mise.local.toml
+.env
+.env.*
+!.env.example

@@ -1,0 +1,18 @@
+{"schemaVersion":1,"adapters":[
+  {"bundleID":"com.anthropic.claudefordesktop","name":"Claude","kind":"launch-only","reason":"claude-new-window-unavailable"},
+  {"bundleID":"com.apple.Safari","name":"Safari","kind":"menu","selector":"safari-default-profile"},
+  {"bundleID":"com.apple.finder","name":"Finder","kind":"applescript","script":"tell application id \"com.apple.finder\"\u000a  make new Finder window\u000aend tell"},
+  {"bundleID":"com.apple.iWork.Keynote","name":"Keynote","kind":"applescript","script":"tell application id \"com.apple.iWork.Keynote\"\u000a  make new document\u000aend tell"},
+  {"bundleID":"com.apple.iWork.Numbers","name":"Numbers","kind":"applescript","script":"tell application id \"com.apple.iWork.Numbers\"\u000a  make new document\u000aend tell"},
+  {"bundleID":"com.apple.iWork.Pages","name":"Pages","kind":"applescript","script":"tell application id \"com.apple.iWork.Pages\"\u000a  make new document\u000aend tell"},
+  {"bundleID":"com.apple.mail","name":"Mail","kind":"menu","menu":["File","New Viewer Window"]},
+  {"bundleID":"com.barebones.bbedit","name":"BBEdit","kind":"applescript","script":"tell application id \"com.barebones.bbedit\"\u000a  make new text window\u000aend tell"},
+  {"bundleID":"com.google.Chrome","name":"Chrome","kind":"applescript","script":"tell application id \"com.google.Chrome\"\u000a  set createdWindow to make new window\u000a  set URL of active tab of createdWindow to \"about:blank\"\u000aend tell"},
+  {"bundleID":"com.microsoft.Excel","name":"Microsoft Excel","kind":"applescript","script":"tell application id \"com.microsoft.Excel\"\u000a  make new workbook\u000aend tell"},
+  {"bundleID":"com.microsoft.Powerpoint","name":"Microsoft PowerPoint","kind":"applescript","script":"tell application id \"com.microsoft.Powerpoint\"\u000a  make new presentation\u000aend tell"},
+  {"bundleID":"com.microsoft.Word","name":"Microsoft Word","kind":"applescript","script":"tell application id \"com.microsoft.Word\"\u000a  make new document\u000aend tell"},
+  {"bundleID":"com.mitchellh.ghostty","name":"Ghostty","kind":"applescript","script":"tell application id \"com.mitchellh.ghostty\"\u000a  set config to new surface configuration\u000a  new window with configuration config\u000aend tell","requirement":"ghostty-applescript-1.3"},
+  {"bundleID":"com.openai.chat","name":"ChatGPT","kind":"menu","menu":["File","New Window"]},
+  {"bundleID":"com.openai.codex","name":"OpenAI desktop","kind":"menu","menu":["File","New Window"]},
+  {"bundleID":"com.superlogical.rex","name":"Rex Beta","kind":"menu","placementPolicy":"position-only-when-sized","menu":["File","New Window"]}
+]}

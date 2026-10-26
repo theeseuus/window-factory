@@ -1,0 +1,18 @@
+[tools]
+node = "24.22.1"
+
+[tasks.build]
+description = "Build and sign Window Factory with the installed Apple SDK"
+run = "./build.sh"
+
+[tasks.test]
+description = "Run native unit, regression and packaging guards without desktop mutations"
+run = "./test.sh"
+
+[tasks.install]
+description = "Install a verified Developer ID build; quit Window Factory first"
+run = "./install.sh"
+
+[tasks.validate]
+description = "Validate source syntax and repository boundaries"
+run = "node scripts/validate.cjs"
