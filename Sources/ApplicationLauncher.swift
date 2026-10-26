@@ -24,13 +24,28 @@ struct ApplicationOpening {
   var request: (URL, NSWorkspace.OpenConfiguration) async throws -> NSRunningApplication = {
     try await NSWorkspace.shared.openApplication(at: $0, configuration: $1)
   }
-  func open(_ entry: ApplicationEntry, url: URL) async throws -> NSRunningApplication {
+  var frontmostPID: () -> Int32? = { NSWorkspace.shared.frontmostApplication?.processIdentifier }
+  var hide: (NSRunningApplication) -> Bool = { $0.hide() }
+  private func selectedRunningApp(_ entry: ApplicationEntry, url: URL) throws -> NSRunningApplication? {
     let applications = running(entry.bundleID)
     let selected = applications.first { $0.bundleURL?.standardizedFileURL == url.standardizedFileURL }
       ?? (applications.count == 1 ? applications.first : nil)
     guard applications.isEmpty || selected != nil else {
       throw FactoryError("Multiple copies of \(entry.name) are running. Select the intended app first.")
     }
+    return selected
+  }
+  // Only an app-launch hotkey opts into hiding. Search and agent open remain explicit opens.
+  func toggle(_ entry: ApplicationEntry, url: URL) async throws -> Bool {
+    if let selected = try selectedRunningApp(entry,url:url), selected.processIdentifier == frontmostPID() {
+      guard hide(selected) else { throw FactoryError("\(entry.name) could not be hidden.") }
+      return true
+    }
+    _ = try await open(entry,url:url)
+    return false
+  }
+  func open(_ entry: ApplicationEntry, url: URL) async throws -> NSRunningApplication {
+    _ = try selectedRunningApp(entry,url:url)
     let configuration = NSWorkspace.OpenConfiguration()
     configuration.activates = true
     configuration.createsNewApplicationInstance = false
@@ -136,7 +151,7 @@ final class ApplicationLauncher {
           if slot == 0 {
             owner.searchRequested?()
           } else if let entry = owner.entries.first(where: { $0.slot == slot }) {
-            owner.launch(entry)
+            owner.launch(entry,toggleIfFrontmost:true)
           }
         }
       }, Unmanaged.passUnretained(self).toOpaque(), &rollback)
@@ -228,7 +243,7 @@ final class ApplicationLauncher {
     }
     return NSWorkspace.shared.urlForApplication(withBundleIdentifier: entry.bundleID)
   }
-  func launch(_ entry: ApplicationEntry) {
+  func launch(_ entry: ApplicationEntry, toggleIfFrontmost: Bool = false) {
     guard live else { return }
     if entry.isSearch {
       searchRequested?()
@@ -252,8 +267,12 @@ final class ApplicationLauncher {
         changed?()
       }
       do {
-        _ = try await open(entry, url: url)
-        lastResult = "Opened \(entry.name)."
+        if toggleIfFrontmost, try await opening.toggle(entry,url:url) {
+          lastResult = "Hidden \(entry.name)."
+        } else {
+          if !toggleIfFrontmost { _ = try await open(entry,url:url) }
+          lastResult = "Opened \(entry.name)."
+        }
       } catch {
         lastResult = error.localizedDescription
         launchFailed?(lastResult)

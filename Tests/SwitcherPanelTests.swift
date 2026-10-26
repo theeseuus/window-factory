@@ -316,7 +316,7 @@ import AppKit
         try apps.configureSearchShortcut(ShortcutChord(key:0,modifiers:ShortcutChord.hyper,name:"A"),enabled:false)
         do {try apps.setShortcut(ShortcutChord(key:0,modifiers:ShortcutChord.hyper,name:"A"),id:fixtureID);check(false,"search shortcut clash must fail")}catch{check(true,"search and app chords share collision validation")}
         reference.applications = apps;reference.refresh()
-        check(referenceText.string.contains("APPLICATIONS") && referenceText.string.contains("Open Fixture App"),"shortcut reference reads current application records")
+        check(referenceText.string.contains("APPLICATIONS") && referenceText.string.contains("Open / hide Fixture App"),"shortcut reference reads current application records")
         try apps.setEnabled(false,id:fixtureID);try apps.setShortcut(nil,id:fixtureID)
         check(apps.entries.first{$0.id==fixtureID}!.shortcut == nil,"clearing a shortcut retains the app entry")
         let alternateURL = appRoot.appendingPathComponent("Moved Fixture.app")
@@ -362,7 +362,7 @@ import AppKit
         _ = NSApp.sendAction(enabledSwitch.action!,to:enabledSwitch.target,from:enabledSwitch)
         check(sortLauncher.entries.first{$0.id==betaID}!.enabled && sortLauncher.entries.first{$0.id==alphaID}!.enabled,"sorted-row toggle edits the intended UUID")
         reference.applications=sortLauncher;reference.refresh()
-        let alphaRange=(referenceText.string as NSString).range(of:"Open Alpha"),betaRange=(referenceText.string as NSString).range(of:"Open beta")
+        let alphaRange=(referenceText.string as NSString).range(of:"Open / hide Alpha"),betaRange=(referenceText.string as NSString).range(of:"Open / hide beta")
         check(alphaRange.location != NSNotFound && alphaRange.location<betaRange.location,"shortcut reference alphabetizes app commands")
         editor.table.selectRowIndexes(IndexSet(integer:editor.displayedEntries.firstIndex{$0.id==alphaID}!),byExtendingSelection:false)
         _ = NSApp.sendAction(NSSelectorFromString("clearShortcut"),to:editor,from:nil)
@@ -391,6 +391,22 @@ import AppKit
         let failedOpening = ApplicationOpening(running:{ _ in [currentProcess] },request:{ _,_ in failedRequests += 1;throw FactoryError("Fixture open failed") })
         do { _ = try await failedOpening.open(openingEntry,url:appURL);check(false,"workspace failure must propagate") }
         catch { check(failedRequests == 1 && error.localizedDescription == "Fixture open failed","workspace errors propagate without duplicate retries") }
+        for (processCount,frontmost) in [(0,Int32(-1)),(1,Int32(-1)),(1,currentProcess.processIdentifier)] {
+            var opens = 0,hides = 0
+            let toggling = ApplicationOpening(running:{ _ in Array(repeating:currentProcess,count:processCount) },request:{ _,_ in opens += 1;return currentProcess },frontmostPID:{frontmost},hide:{ app in
+                check(app.processIdentifier == currentProcess.processIdentifier,"hide targets the selected app process")
+                hides += 1;return true
+            })
+            let hidden = try await toggling.toggle(openingEntry,url:appURL)
+            let shouldHide = processCount == 1 && frontmost == currentProcess.processIdentifier
+            check(hidden == shouldHide && hides == (shouldHide ? 1 : 0) && opens == (shouldHide ? 0 : 1),"hotkey hides only the frontmost target; stopped/background apps open once")
+            _ = try await toggling.open(openingEntry,url:appURL)
+            check(opens == (shouldHide ? 1 : 2) && hides == (shouldHide ? 1 : 0),"explicit search/CLI open never hides even a frontmost app")
+        }
+        var refusedHideRequests = 0
+        let refusingHide = ApplicationOpening(running:{_ in [currentProcess]},request:{_,_ in refusedHideRequests += 1;return currentProcess},frontmostPID:{currentProcess.processIdentifier},hide:{_ in false})
+        do { _ = try await refusingHide.toggle(openingEntry,url:appURL);check(false,"failed hide must be reported") }
+        catch { check(refusedHideRequests == 0 && error.localizedDescription == "Fixture App could not be hidden.","failed hide never falls through into an open") }
         reference.stop()
         settings.stop()
         print("native switcher panel: \(assertions) assertions passed; no windows shown or controlled")

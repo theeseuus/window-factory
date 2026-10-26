@@ -1,6 +1,6 @@
 # Usage and shortcuts
 
-Version: 1.3
+Version: 1.4
 Updated: 2026-10-27
 
 The library captures app identities and normalized window geometry. It does not
@@ -39,6 +39,12 @@ F1–F20 can be recorded on their own or with Shift (for example F13 to open an
 app and Shift+F13 for a separate command). Other keys require Control, Option or
 Command. These use the same clash checks; an existing Raycast/system assignment
 may need to be released before recording the replacement.
+
+An application-launch shortcut opens or brings its app forward. When that app is
+already frontmost, the same shortcut hides it; pressing again brings it back.
+This hides the application, not just one window, and does not quit it. Selecting
+an app in Applications search and the CLI `app-open` command always open/activate
+and never toggle hidden state.
 
 Click Applications settings column headings to sort by name, enabled state or
 whether a shortcut is assigned; click again to reverse. State groups use
