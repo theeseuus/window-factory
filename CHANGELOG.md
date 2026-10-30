@@ -1,5 +1,19 @@
 # Source baseline
 
+## 2026-10-31 — quiet login/session startup, build 56
+
+Login/service launch markers are recognised by their documented presence and
+property-data forms. Restored-session open and reopen events also stay quiet;
+ordinary deliberate launches/reopens still show the library. This does not change
+login registration, Dock visibility, shortcuts, the agent API or build 55's
+Space-move correction.
+
+Validation, signed build and the full fixture suite passed, including real
+AppleEvent-descriptor fixtures for login/service, restore yes/no and normal
+launch/reopen cases. Installed background startup was verified with no visible
+app windows and no foreground activation; layouts/preferences and Accessibility/
+Agent access were preserved. A real reboot/login confirmation remains pending.
+
 ## 2026-10-31 — Emacs Space-move cancellation, build 55
 
 The shared keyboard/agent move-and-follow controller now classifies input during

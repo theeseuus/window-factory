@@ -18,8 +18,8 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
     var agentWindows: AgentDirectWindows?
     var keybindings: KeybindingManager?
     var launcher: LauncherControls?
-    private var loginLaunch = false
-    func applicationWillFinishLaunching(_ notification: Notification) { loginLaunch = LauncherControls.isLoginLaunch(NSAppleEventManager.shared().currentAppleEvent) }
+    private var backgroundLaunch = false
+    func applicationWillFinishLaunching(_ notification: Notification) { backgroundLaunch = LauncherControls.isBackgroundLaunch(NSAppleEventManager.shared().currentAppleEvent) }
     var spaceIndicator: SpaceIndicator?
     var spaceMove: DirectSpaceMoveControls?
     var accordion: DirectAccordionControls?
@@ -217,8 +217,8 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
             windowItem.submenu = windowMenu; menu.addItem(windowItem)
             if let system { let systemItem=NSMenuItem();systemItem.identifier=NSUserInterfaceItemIdentifier("system");systemItem.submenu=system.makeMenu();menu.addItem(systemItem) }
             NSApp.mainMenu = menu
-            loginLaunch = loginLaunch || LauncherControls.isLoginLaunch(NSAppleEventManager.shared().currentAppleEvent)
-            if FactoryLaunchPolicy.showsLibrary(arguments:args,loginLaunch:loginLaunch) { library?.show() }
+            backgroundLaunch = backgroundLaunch || LauncherControls.isBackgroundLaunch(NSAppleEventManager.shared().currentAppleEvent)
+            if FactoryLaunchPolicy.showsLibrary(arguments:args,loginLaunch:backgroundLaunch) { library?.show() }
         } catch {
             let alert = NSAlert(); alert.messageText = "Window Factory could not start"; alert.informativeText = error.localizedDescription
             alert.runModal(); NSApp.terminate(nil)
@@ -278,7 +278,11 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
     @objc func showShortcuts(_ sender: Any?) { shortcutReference?.show() }
     @objc func showSettings(_ sender: Any?) { settings?.show() }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
-    func applicationShouldHandleReopen(_ sender: NSApplication,hasVisibleWindows flag: Bool) -> Bool { library?.show(); return true }
+    func applicationShouldHandleReopen(_ sender: NSApplication,hasVisibleWindows flag: Bool) -> Bool {
+        // Reboot/session restoration is not a deliberate request to open the UI.
+        guard !LauncherControls.isBackgroundLaunch(NSAppleEventManager.shared().currentAppleEvent) else {return false}
+        library?.show();return true
+    }
     func applicationDidBecomeActive(_ notification: Notification) { library?.updateButtons(); launcher?.refreshLoginState(); settings?.refresh() }
     func applicationWillTerminate(_ notification: Notification) { systemCommands?.stop(); tilingShortcut?.stop();newWindowShortcut?.stop();newWindow?.stop();newWindowHUD.stop();tiling?.stop();applications?.stop();applicationSearch?.stop();agent?.stop(); launcher?.stop(); spaceIndicator?.stop(); spaceMove?.stop(); accordion?.stop(); switcher?.stop(); stash?.stop(); shortcutReference?.stop(); focus?.stop(); geometry?.stop(); library?.stop(); settings?.stop() }
 }

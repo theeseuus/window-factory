@@ -1,6 +1,6 @@
 # Usage and shortcuts
 
-Version: 1.8
+Version: 1.9
 Updated: 2026-10-31
 
 The library captures app identities and normalized window geometry. It does not
@@ -105,3 +105,11 @@ Other observed keys and pointer presses still cancel. A session-wide keyboard
 count alone does not stop an already-dispatched move when event observation is
 available; desktop and exact-window verification remain required. This is shared
 by the keyboard and agent CLI paths.
+
+## Startup
+
+Login-item and macOS restored-session launches keep the library closed, including
+restoration reopen events after a reboot. Explicit `--background` launches also
+stay quiet. Open the library with Tab+R, its menu-bar command or a deliberate Dock
+reopen. A normal fresh launch from Applications still opens it. This does not
+change start-at-login registration or the Dock visibility preference.

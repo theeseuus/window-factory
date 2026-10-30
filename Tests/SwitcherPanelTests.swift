@@ -65,15 +65,36 @@ import AppKit
         func event(_ id: AEEventID = AEEventID(kAEOpenApplication)) -> NSAppleEventDescriptor {
             NSAppleEventDescriptor(eventClass:AEEventClass(kCoreEventClass),eventID:id,targetDescriptor:nil,returnID:AEReturnID(kAutoGenerateReturnID),transactionID:AETransactionID(kAnyTransactionID))
         }
-        check(!LauncherControls.isLoginLaunch(nil),"missing launch event is a normal launch")
-        check(!LauncherControls.isLoginLaunch(event()),"ordinary open shows the library")
+        check(!LauncherControls.isBackgroundLaunch(nil),"missing launch event is a normal launch")
+        check(!LauncherControls.isBackgroundLaunch(event()),"ordinary open shows the library")
         let direct = event(); direct.setParam(NSAppleEventDescriptor(boolean:true),forKeyword:AEKeyword(keyAELaunchedAsLogInItem))
-        check(LauncherControls.isLoginLaunch(direct),"login marker is recognized")
+        check(LauncherControls.isBackgroundLaunch(direct),"login marker is recognized")
         let property = event(); property.setParam(NSAppleEventDescriptor(enumCode:OSType(keyAELaunchedAsLogInItem)),forKeyword:AEKeyword(keyAEPropData))
-        check(LauncherControls.isLoginLaunch(property),"login property-data marker is recognized")
+        check(LauncherControls.isBackgroundLaunch(property),"login property-data marker is recognized")
         let unrelated = event(AEEventID(kAEReopenApplication)); unrelated.setParam(NSAppleEventDescriptor(boolean:true),forKeyword:AEKeyword(keyAELaunchedAsLogInItem))
-        check(!LauncherControls.isLoginLaunch(unrelated),"reopening the app is not a quiet login launch")
-        check(!FactoryLaunchPolicy.showsLibrary(arguments:[],loginLaunch:LauncherControls.isLoginLaunch(property)),"login launches keep the library closed")
+        check(LauncherControls.isBackgroundLaunch(unrelated),"marked login reopen remains quiet")
+        check(!FactoryLaunchPolicy.showsLibrary(arguments:[],loginLaunch:LauncherControls.isBackgroundLaunch(property)),"login launches keep the library closed")
+        func launchEvent(_ id: AEEventID = AEEventID(kAEOpenApplication)) -> NSAppleEventDescriptor {
+            NSAppleEventDescriptor(eventClass:AEEventClass(kCoreEventClass),eventID:id,targetDescriptor:nil,
+                returnID:AEReturnID(kAutoGenerateReturnID),transactionID:AETransactionID(kAnyTransactionID))
+        }
+        check(!LauncherControls.isBackgroundLaunch(nil),"no launch marker preserves deliberate launch")
+        check(!LauncherControls.isBackgroundLaunch(launchEvent()),"ordinary application launch shows UI")
+        check(!LauncherControls.isBackgroundLaunch(launchEvent(AEEventID(kAEReopenApplication))),"normal Dock reopen is explicit")
+        for id in [AEEventID(kAEOpenApplication),AEEventID(kAEReopenApplication)] {
+            for marker in [keyAELaunchedAsLogInItem,keyAELaunchedAsServiceItem] {
+                let event=launchEvent(id);event.setParam(.null(),forKeyword:AEKeyword(marker))
+                check(LauncherControls.isBackgroundLaunch(event),"presence-only login/service marker stays quiet")
+                let property=launchEvent(id);property.setParam(NSAppleEventDescriptor(enumCode:OSType(marker)),forKeyword:AEKeyword(keyAEPropData))
+                check(LauncherControls.isBackgroundLaunch(property),"property-data login/service marker stays quiet")
+            }
+            let restored=launchEvent(id);restored.setParam(NSAppleEventDescriptor(enumCode:OSType(kAEYes)),forKeyword:AEKeyword(keyAERestoreAppState))
+            check(LauncherControls.isBackgroundLaunch(restored),"session restoration stays quiet on open and reopen")
+            let boolean=launchEvent(id);boolean.setParam(NSAppleEventDescriptor(boolean:true),forKeyword:AEKeyword(keyAERestoreAppState))
+            check(LauncherControls.isBackgroundLaunch(boolean),"Boolean restoration marker stays quiet")
+            let normal=launchEvent(id);normal.setParam(NSAppleEventDescriptor(enumCode:OSType(kAENo)),forKeyword:AEKeyword(keyAERestoreAppState))
+            check(!LauncherControls.isBackgroundLaunch(normal),"explicit no-restore marker does not suppress deliberate launch")
+        }
         let preferenceName = "WindowFactory.DockTest.\(UUID().uuidString)"
         let dockDefaults = UserDefaults(suiteName:preferenceName)!
         defer { dockDefaults.removePersistentDomain(forName:preferenceName) }

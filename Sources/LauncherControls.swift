@@ -58,11 +58,16 @@ final class LauncherControls {
         refreshLoginState(); changed?()
     }
     func openLoginSettings() { SMAppService.openSystemSettingsLoginItems() }
-    static func isLoginLaunch(_ event: NSAppleEventDescriptor?) -> Bool {
-        guard let event,event.eventID == AEEventID(kAEOpenApplication) else { return false }
-        // Support the documented login marker and its property-data form.
-        return event.paramDescriptor(forKeyword:AEKeyword(keyAELaunchedAsLogInItem))?.booleanValue == true
-            || event.paramDescriptor(forKeyword:AEKeyword(keyAEPropData))?.enumCodeValue == OSType(keyAELaunchedAsLogInItem)
+    static func isBackgroundLaunch(_ event: NSAppleEventDescriptor?) -> Bool {
+        guard let event,[AEEventID(kAEOpenApplication),AEEventID(kAEReopenApplication)].contains(event.eventID) else {return false}
+        // The SDK specifies presence for login/service markers, rather than a
+        // Boolean payload. Session restoration uses the separate rsto marker.
+        if event.paramDescriptor(forKeyword:AEKeyword(keyAELaunchedAsLogInItem)) != nil
+            || event.paramDescriptor(forKeyword:AEKeyword(keyAELaunchedAsServiceItem)) != nil {return true}
+        let property=event.paramDescriptor(forKeyword:AEKeyword(keyAEPropData))?.enumCodeValue
+        if property == OSType(keyAELaunchedAsLogInItem) || property == OSType(keyAELaunchedAsServiceItem) {return true}
+        guard let restore=event.paramDescriptor(forKeyword:AEKeyword(keyAERestoreAppState)) else {return false}
+        return restore.enumCodeValue == OSType(kAEYes) || (restore.descriptorType == DescType(typeBoolean) && restore.booleanValue)
     }
     func stop() { WFUnregisterLauncherHotKey(); active = false }
 }
