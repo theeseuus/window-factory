@@ -120,6 +120,14 @@ import Darwin
         check(!(await service.handle(unknownFields)).ok,"unknown wire fields rejected")
         var toolDispatches=0
         service.stashedWindowIDs={ [71] }
+        check(await call(AgentRequest(command:.status)).result?.status?.lastSpaceMove == nil,"status has no move diagnostic until an attempt exists")
+        let moveTrace=SpaceMoveDiagnostics(direction:1,invocation:"fixture")
+        moveTrace.report.moveDispatched=true;moveTrace.mark("membership");moveTrace.report.failedCheck="new_input";moveTrace.finish("failed",detail:"Fixture new input")
+        service.spaceMoveDiagnostic={moveTrace.report}
+        let moveStatus=await call(AgentRequest(command:.status))
+        let wireStatus=try AgentResponse.decode(moveStatus.encoded())
+        check(wireStatus.result?.status?.lastSpaceMove?.attemptID == moveTrace.report.attemptID && wireStatus.result?.status?.lastSpaceMove?.followDispatched == false,"CLI status exposes the exact structured partial-move report")
+
         service.connectTools(query:{request in
             AgentToolResult(message:request.command.rawValue)
         },mutate:{request in

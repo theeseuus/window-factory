@@ -71,7 +71,7 @@ enum ShortcutValidation {
             guard chord.key<=127,chord.modifiers & ~(ShortcutChord.hyper|ShortcutChord.shift) == 0,
                   (chord.modifiers&ShortcutChord.hyper != 0 || ShortcutChord.functionKeys[chord.key] != nil),chord.key != 53,
                   !chord.name.isEmpty,chord.name.count<=16,!chord.name.unicodeScalars.contains(where:{$0.value<32}) else { throw FactoryError("Use a function key, or another key with Control, Option or Command.") }
-            if chord.key == 15 && chord.modifiers == ShortcutChord.hyper|ShortcutChord.shift { throw FactoryError("\(chord.label) is reserved for the Hammerspoon fallback.") }
+            if chord.key == 15 && chord.modifiers == ShortcutChord.hyper|ShortcutChord.shift { throw FactoryError("\(chord.label) is a historically reserved binding.") }
             if (chord.key == 123 || chord.key == 124 || chord.key == 125 || chord.key == 126) && chord.modifiers == ShortcutChord.control { throw FactoryError("\(chord.label) is reserved for macOS desktop navigation.") }
             if (chord.key == 48 || chord.key == 49) && (chord.modifiers == ShortcutChord.command || chord.modifiers == ShortcutChord.command|ShortcutChord.shift) { throw FactoryError("\(chord.label) is reserved by macOS.") }
             if [UInt32(12),13,43].contains(chord.key) && chord.modifiers == ShortcutChord.command { throw FactoryError("\(chord.label) is reserved for standard app commands.") }

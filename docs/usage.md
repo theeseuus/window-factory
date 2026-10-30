@@ -1,7 +1,7 @@
 # Usage and shortcuts
 
-Version: 1.6
-Updated: 2026-10-27
+Version: 1.7
+Updated: 2026-10-31
 
 The library captures app identities and normalized window geometry. It does not
 capture window titles, URLs, document paths or application contents. Restore uses
@@ -19,8 +19,9 @@ opens Settings and Escape cancels/closes. Context menus offer row actions.
 Global defaults use Hyper = Control+Option+Command. A remapper may translate held
 Tab to Hyper, but Window Factory receives the ordinary modifier chord. The default
 Hyper+R toggles the library; Hyper+/ toggles Keyboard Shortcuts. Hyper+Shift+R is
-reserved for the separate Hammerspoon fallback. Do not register both owners for
-the same command. Settings toggles act on the selected shortcut group.
+retained as a historically reserved chord. The Hammerspoon setup is archived
+and is not an active fallback. Settings toggles act on the selected shortcut
+group.
 
 | Group | Default chords |
 | --- | --- |
@@ -91,3 +92,11 @@ No launcher extension or third-party app is needed. Release an old assignment in
 another shortcut owner before recording the same chord here. System actions are
 not exposed through Agent access. Sleep is tested only through injected effects;
 a live sleep/wake check is owner-controlled.
+
+## Partial Space moves
+
+Movement, following the destination and restoring focus are separately verified.
+A failure can leave a window moved even when the desktop did not follow. Before
+retrying, check where the window actually is. Agent access can read the latest
+structured report through `status`; see [the diagnostic contract](../CLI.md#space-move-diagnostics).
+The report does not change how controls behave and contains no document contents.

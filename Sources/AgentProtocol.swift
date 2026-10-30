@@ -210,6 +210,7 @@ struct AgentStatus: Codable {
   let instanceID: UUID, agentAccess: Bool, accessibility: Bool, busy: Bool
   let desktops: [AgentDesktop]
   var stashedWindowIDs: [UInt32]?
+  var lastSpaceMove: SpaceMoveDiagnosticReport? = nil
 }
 struct AgentJob: Codable {
   let id: UUID, requestID: UUID, command: AgentCommand, name: String, context: AgentDesktop,

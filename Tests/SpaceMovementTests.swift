@@ -77,6 +77,33 @@ import Foundation
             if mode == "never" { check(samples == 25 && requests == 3,"stale/background focus fails with a bounded retry budget") }
             if mode == "input-change" { check(requests == 1 && samples == 2,"new input stops restoration before any retry") }
         }
+        for mode in ["single-before-follow","rapid-input","focus-loss"] {
+            let trace=SpaceMoveDiagnostics(direction:1,invocation:"fixture",appBuild:"fixture")
+            trace.report.sourceSpace=100;trace.report.destinationSpace=20
+            do {
+                try await SpaceMovement.perform(right,check:{phase in
+                    trace.mark(String(describing:phase))
+                    if mode == "single-before-follow", case .beforeFollow = phase {throw FactoryError("Fixture context changed")}
+                    if mode == "rapid-input",case .membership = phase {
+                        trace.report.inputDeltas=[1,0,0,0];trace.report.failedCheck="new_input"
+                        throw FactoryError("Fixture new input")
+                    }
+                },move:{trace.report.moveDispatched=true;if mode == "rapid-input"{trace.report.ignoredMoveRequests += 1};return true},membership:{trace.report.membershipReads += 1;trace.report.lastWindowSpaces=[20];return [20]},follow:{trace.report.followDispatched=true;return true},destinationVisible:{true},finish:{
+                    trace.mark("focusRestoration");trace.report.focusRequests=1
+                    throw FactoryError("Fixture focus not confirmed")
+                },pause:{})
+                check(false,"diagnostic fixture must stop at its selected stage")
+            } catch {trace.finish("failed",detail:error.localizedDescription)}
+            let report=trace.report
+            check(report.moveDispatched && report.outcome == "failed","report records a partial move truthfully")
+            if mode == "single-before-follow" {check(!report.followDispatched && report.phase == "beforeFollow" && report.ignoredMoveRequests == 0,"single-press pre-follow failure is distinct from rapid input")}
+            if mode == "rapid-input" {check(!report.followDispatched && report.failedCheck == "new_input" && report.ignoredMoveRequests == 1,"rapid repeat and input cancellation are recorded separately")}
+            if mode == "focus-loss" {check(report.followDispatched && report.phase == "focusRestoration" && report.focusRequests == 1,"arrival/focus failure is distinct from no follow")}
+            let encoded=try JSONEncoder().encode(report),decoded=try JSONDecoder().decode(SpaceMoveDiagnosticReport.self,from:encoded)
+            check(decoded.attemptID == report.attemptID && decoded.phase == report.phase,"diagnostic report is structured and round trips")
+            let object=try JSONSerialization.jsonObject(with:encoded) as! [String:Any]
+            check(object["title"] == nil && object["path"] == nil && object["keys"] == nil,"diagnostics contain no window title, path or pressed key values")
+        }
         print("native Space movement: \(assertions) assertions passed; no desktop queries or mutations")
     }
 }

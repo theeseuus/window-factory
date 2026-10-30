@@ -12,6 +12,19 @@ final class DirectSpaceMoveControls {
     var willMove: (()->Void)?
     var workspaceBusy: () -> Bool = { false }
     var changed: (() -> Void)?
+    private var diagnostic: SpaceMoveDiagnostics?
+    var lastDiagnostic: SpaceMoveDiagnosticReport? { diagnostic?.report }
+    private func beginDiagnostic(_ direction: Int,invocation: String) -> SpaceMoveDiagnostics {
+        let value=SpaceMoveDiagnostics(direction:direction,invocation:invocation,appBuild:Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String)
+        diagnostic=value;return value
+    }
+    private func recordTarget(_ value: SpaceMoveDiagnostics,window: LiveWindow,context: Context) {
+        value.report.bundleID=window.bundleID;value.report.windowID=window.id;value.report.processID=window.pid
+        value.report.displayID=context.display;value.report.sourceSpace=context.space
+        if let url=NSRunningApplication(processIdentifier:window.pid)?.bundleURL {
+            value.report.appVersion=Bundle(url:url)?.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String
+        }
+    }
     init(preferences: FactoryPreferences) { self.preferences = preferences }
     func enable() throws {
         guard AXIsProcessTrusted(),WFSpaceMoveAvailable() else { throw FactoryError("Accessibility and the native Space bridge are required for move-and-follow.") }
@@ -25,7 +38,7 @@ final class DirectSpaceMoveControls {
     }
     func disable() {
         WFUnregisterSpaceMoveHotKeys(); task?.cancel(); active = false; preferences.spaceMoveEnabled = false
-        lastResult = "Space arrows released; the Hammerspoon fallback can be enabled."; changed?()
+        lastResult = "Space arrows released."; changed?()
     }
     func restorePreference() {
         if preferences.spaceMoveEnabled { do { try enable() } catch { preferences.spaceMoveEnabled = false; lastResult = error.localizedDescription; changed?() } }
@@ -79,37 +92,46 @@ final class DirectSpaceMoveControls {
             }
         return Prepared(entries:entries,plan:plan,sourceWindows:sourceWindows,input:inputCounts())
     }
-    private func perform(_ direction: Int,window: LiveWindow,context: Context,prepared: Prepared) async throws {
+    private func perform(_ direction: Int,window: LiveWindow,context: Context,prepared: Prepared,diagnostic: SpaceMoveDiagnostics) async throws {
         let entries=prepared.entries,plan=prepared.plan,sourceWindows=prepared.sourceWindows,startingInput=prepared.input
+        diagnostic.report.destinationSpace=plan.destination
                 var moved = false,followed = false
                 do {
                     @MainActor func current() throws -> UInt64 {
                         var id: UInt64 = 0,kind: Int32 = -1
                         guard WFContext(context.display,&id,&kind),kind == 0 else { throw FactoryError("Ordinary desktop unavailable; operation stopped.") }
+                        diagnostic.report.lastObservedSpace=id
                         return id
                     }
                     @MainActor func identity() throws {
                         try Task.checkCancellation()
-                        guard inputCounts() == startingInput else { throw FactoryError("New keyboard or pointer input; Space command stopped.") }
+                        let counts=inputCounts()
+                        diagnostic.report.inputDeltas=zip(counts,startingInput).map{$0 &- $1}
+                        guard counts == startingInput else { diagnostic.report.failedCheck="new_input";throw FactoryError("New keyboard or pointer input; Space command stopped.") }
                         guard (!workspaceBusy() || agentRunning),
                               NSRunningApplication(processIdentifier:window.pid)?.bundleIdentifier == window.bundleID,
                               NSRunningApplication(processIdentifier:window.pid)?.isHidden == false,
                               WFWindowID(window.element) == window.id,
                               attribute(window.element,kAXSubroleAttribute) as? String == kAXStandardWindowSubrole,
                               (attribute(window.element,kAXMinimizedAttribute) as? Bool) != true,
-                              (attribute(window.element,"AXFullScreen") as? Bool) != true else { throw FactoryError("Application or window eligibility changed; Space command stopped.") }
+                              (attribute(window.element,"AXFullScreen") as? Bool) != true else { diagnostic.report.failedCheck="window_eligibility";throw FactoryError("Application or window eligibility changed; Space command stopped.") }
                         let fresh = try topology(context.display)
-                        guard fresh.map(\.id) == entries.map(\.id),fresh.map(\.kind) == entries.map(\.kind) else { throw FactoryError("Desktop order changed; Space command stopped.") }
+                        guard fresh.map(\.id) == entries.map(\.id),fresh.map(\.kind) == entries.map(\.kind) else { diagnostic.report.failedCheck="desktop_topology";throw FactoryError("Desktop order changed; Space command stopped.") }
                     }
                     try await SpaceMovement.perform(plan,check:{ phase in
+                        diagnostic.mark(String(describing:phase))
                         try identity()
                         let shown = try current()
                         switch phase {
                         case .beforeMove:
-                            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == window.pid else { throw FactoryError("Foreground application changed before movement.") }
+                            let frontmost=NSWorkspace.shared.frontmostApplication?.processIdentifier
+                            diagnostic.report.lastFrontmostPID=frontmost
+                            guard frontmost == window.pid else { diagnostic.report.failedCheck="foreground_before_move";throw FactoryError("Foreground application changed before movement.") }
                             try window.eligible(in:context)
                             let root = AXUIElementCreateApplication(window.pid); AXUIElementSetMessagingTimeout(root,0.1)
-                            guard let focused = axElement(attribute(root,kAXFocusedWindowAttribute)),WFWindowID(focused) == window.id else { throw FactoryError("Focused window changed before movement.") }
+                            guard let focused = axElement(attribute(root,kAXFocusedWindowAttribute)) else { diagnostic.report.failedCheck="focused_window_before_move";throw FactoryError("Focused window changed before movement.") }
+                            let focusedID=WFWindowID(focused);diagnostic.report.lastFocusedWindowID=focusedID
+                            guard focusedID == window.id else { diagnostic.report.failedCheck="focused_window_before_move";throw FactoryError("Focused window changed before movement.") }
                         case .membership,.beforeFollow:
                             guard shown == plan.source else { throw FactoryError("Desktop changed before follow; command stopped.") }
                         case .following:
@@ -119,20 +141,25 @@ final class DirectSpaceMoveControls {
                         }
                     },move:{
                         let sent = WFMoveWindowToAdjacentSpace(window.element,window.pid,context.display,plan.source,plan.destination)
+                        diagnostic.report.moveDispatched=sent
                         moved = sent; return sent
                     },membership:{
                         guard let ids = WFWindowSpaces(window.id)?.map(\.uint64Value) else { throw FactoryError("Window membership unavailable.") }
+                        diagnostic.report.membershipReads += 1;diagnostic.report.lastWindowSpaces=ids
                         return ids
                     },follow:{
                         let sent = WFSwitcherSelectSpace(context.display,plan.source,plan.destination)
+                        diagnostic.report.followDispatched=sent
                         followed = sent; return sent
                     },destinationVisible:{
+                        diagnostic.report.visibilityReads += 1
                         guard try current() == plan.destination else { return false }
                         let infos = CGWindowListCopyWindowInfo(.optionOnScreenOnly,kCGNullWindowID) as? [[String:Any]] ?? []
                         let targetVisible = infos.contains{($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value == window.id && ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == window.pid}
                         let originHidden = sourceWindows.allSatisfy { id,pid in
                             !infos.contains{($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value == id && ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid}
                         }
+                        diagnostic.report.targetVisible=targetVisible;diagnostic.report.sourceWindowsHidden=originHidden
                         return targetVisible && originHidden
                     },finish:{
                         let destination = try Context(screen:context.screen)
@@ -142,6 +169,7 @@ final class DirectSpaceMoveControls {
                             guard try current() == plan.destination else { throw FactoryError("Destination changed; frame/focus restoration stopped.") }
                         }
                         if !(try read(window.element)).matches(window.frame) {
+                            diagnostic.mark("frameRestoration")
                             let actual = try await DirectFrameApplication.apply(target:window.frame,from:read(window.element),check:checkDestination,read:{try self.read(window.element)},write:{kind,f in
                                 let status = kind == .position ? WFSetPosition(window.element,CGPoint(x:f.x,y:f.y)) : WFSetSize(window.element,CGSize(width:f.w,height:f.h))
                                 guard status == .success else { throw FactoryError("App rejected moved-window frame restoration.") }
@@ -152,19 +180,26 @@ final class DirectSpaceMoveControls {
                             guard actual.matches(window.frame) else { throw FactoryError("Moved and followed, but the saved frame was not reached.") }
                         }
                         try checkDestination()
+                        diagnostic.mark("focusRestoration")
                         try await SpaceMovement.restoreFocus(check:checkDestination,request:{
                             var main: Int32 = 0,raised: Int32 = 0
                             let status = WFRequestWindowFocus(window.element,window.pid,&main,&raised)
+                            diagnostic.report.focusRequests += 1;diagnostic.report.focusActivationStatus=status
+                            diagnostic.report.focusMainStatus=main;diagnostic.report.focusRaiseStatus=raised
                             guard status == 0 else { throw FactoryError("Moved and followed, but focus activation failed (status \(status)).") }
                         },focused:{
-                            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == window.pid else { return false }
+                            diagnostic.report.focusObservations += 1
+                            let frontmost=NSWorkspace.shared.frontmostApplication?.processIdentifier
+                            diagnostic.report.lastFrontmostPID=frontmost
+                            guard frontmost == window.pid else { return false }
                             let system = AXUIElementCreateSystemWide(); AXUIElementSetMessagingTimeout(system,0.1)
                             guard let root = axElement(attribute(system,kAXFocusedApplicationAttribute)) else { return false }
                             var pid: pid_t = 0
                             guard AXUIElementGetPid(root,&pid) == .success,pid == window.pid else { return false }
                             AXUIElementSetMessagingTimeout(root,0.1)
                             guard let focused = axElement(attribute(root,kAXFocusedWindowAttribute)) else { return false }
-                            return WFWindowID(focused) == window.id
+                            let focusedID=WFWindowID(focused);diagnostic.report.lastFocusedWindowID=focusedID
+                            return focusedID == window.id
                         })
                     })
                     lastResult="\(direction<0 ? "←" : "→") Desktop \(plan.ordinal): exact window moved, followed and focused."
@@ -174,25 +209,32 @@ final class DirectSpaceMoveControls {
                 }
     }
     func run(_ direction: Int) {
-        guard active,!isMoving,!workspaceBusy() else{return}
+        guard active else{return}
+        guard !isMoving else {diagnostic?.report.ignoredMoveRequests += 1;return}
+        guard !workspaceBusy() else{return}
+        let trace=beginDiagnostic(direction,invocation:"shortcut")
         do {
-            let (window,context)=try snapshot();willMove?();let prepared=try prepare(direction,window:window,context:context)
+            let (window,context)=try snapshot();recordTarget(trace,window:window,context:context)
+            willMove?();trace.mark("preparation");let prepared=try prepare(direction,window:window,context:context)
             task=Task{@MainActor [weak self] in
                 guard let self else{return};defer{task=nil;changed?()}
-                do{try await perform(direction,window:window,context:context,prepared:prepared);hud.show(lastResult,on:context.screen)}
-                catch is CancellationError{lastResult="Space command cancelled; verify the moved window's desktop."}
-                catch{lastResult=error.localizedDescription;hud.show(lastResult,on:context.screen)}
+                do{try await perform(direction,window:window,context:context,prepared:prepared,diagnostic:trace);trace.finish("succeeded");hud.show(lastResult,on:context.screen)}
+                catch is CancellationError{lastResult="Space command cancelled; verify the moved window's desktop.";trace.finish("cancelled",detail:lastResult)}
+                catch{lastResult=error.localizedDescription;trace.finish("failed",detail:lastResult);hud.show(lastResult,on:context.screen)}
             }
-        }catch{lastResult=error.localizedDescription;hud.show(lastResult);changed?()}
+        }catch{lastResult=error.localizedDescription;trace.finish("failed",detail:lastResult);hud.show(lastResult);changed?()}
     }
     func forAgent(_ direction: Int,id: UInt32,context: Context) async throws->UInt64 {
         guard !isMoving else{throw AgentFailure("busy","Space owner is busy.")}
-        let (window,actual)=try snapshot()
-        guard window.id==id,actual.display==context.display,actual.space==context.space else{throw AgentFailure("window_changed","Exact move target changed.")}
-        agentRunning=true;defer{agentRunning=false;changed?()};willMove?()
-        let prepared=try prepare(direction,window:window,context:actual)
-        try await perform(direction,window:window,context:actual,prepared:prepared)
-        return prepared.plan.destination
+        let trace=beginDiagnostic(direction,invocation:"agent")
+        do {
+            let (window,actual)=try snapshot();recordTarget(trace,window:window,context:actual)
+            guard window.id==id,actual.display==context.display,actual.space==context.space else{throw AgentFailure("window_changed","Exact move target changed.")}
+            agentRunning=true;defer{agentRunning=false;changed?()};willMove?()
+            trace.mark("preparation");let prepared=try prepare(direction,window:window,context:actual)
+            try await perform(direction,window:window,context:actual,prepared:prepared,diagnostic:trace)
+            trace.finish("succeeded");return prepared.plan.destination
+        } catch {trace.finish(error is CancellationError ? "cancelled" : "failed",detail:error.localizedDescription);throw error}
     }
     func stop() { WFUnregisterSpaceMoveHotKeys(); task?.cancel(); active = false; hud.stop() }
 }

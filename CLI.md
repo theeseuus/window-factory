@@ -1,7 +1,7 @@
 # Window Factory CLI
 
-Version: 1.0
-Updated: 2026-10-26
+Version: 1.1
+Updated: 2026-10-31
 
 `scripts/window-factory` (or the installed binary with `--cli`) provides JSON access to the running app's layout, application, tiling and direct window operations.
 It does not open Window Factory’s library, confirmation panels or Settings,
@@ -177,3 +177,24 @@ busy rejection, structured receipts/partial results, capture replacement,
 cancellation and disabling access mid-job. It does not move desktop windows or
 claim live app creation compatibility. Installed-app read-only and layout pilots
 are scoped separately in [architecture and evidence](docs/architecture.md).
+
+## Space-move diagnostics
+
+After a move-and-follow attempt, `status` and `capabilities` include an optional
+`result.status.lastSpaceMove` report. It is absent before the first attempt and
+resets when the app restarts. It describes the latest shortcut or agent attempt;
+a later move replaces it. Rejected busy CLI jobs do not replace the active report.
+
+The report identifies the app by bundle ID/version and the exact window/process,
+display and Space IDs. It includes phase timings, move/follow dispatch results,
+last observed membership/visibility, focus-request statuses and observations,
+input-counter deltas (key down, left/right/other mouse down), ignored repeat-move
+requests and the final outcome/detail. `failedCheck` categorizes input,
+eligibility, topology or pre-move focus guards where available. A phase tells
+where the operation stopped, not the underlying app-specific cause.
+
+It piggybacks on existing movement observations: no background polling, stored
+history, window titles, document paths, key values or extra movement/focus
+requests. Inspect the report before another move; do not blindly retry a failed
+move because its first stage may already have completed. Diagnostic-only builds
+do not change timing, cancellation, retry or movement semantics.

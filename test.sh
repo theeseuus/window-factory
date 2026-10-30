@@ -81,7 +81,7 @@ xcrun --sdk macosx swiftc -swift-version 6 -parse-as-library -warnings-as-errors
 
 xcrun --sdk macosx swiftc -swift-version 6 -parse-as-library -warnings-as-errors \
     -module-cache-path "$native_root/.build/ModuleCache" \
-    "$native_root/Sources/Core.swift" "$native_root/Sources/SpaceMovement.swift" \
+    "$native_root/Sources/Core.swift" "$native_root/Sources/SpaceMovement.swift" "$native_root/Sources/SpaceMoveDiagnostics.swift" \
     "$native_root/Tests/SpaceMovementTests.swift" -o "$native_root/.build/space-movement-tests"
 "$native_root/.build/space-movement-tests"
 

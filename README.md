@@ -1,7 +1,7 @@
 # Window Factory
 
-Version: 1.0
-Updated: 2026-10-26
+Version: 1.1
+Updated: 2026-10-31
 
 <img src="Resources/WindowFactory.icon/Assets/WindowFactory.png" width="128" alt="Window Factory sculpted blue app icon">
 
@@ -88,7 +88,8 @@ and broader failure scenarios need their own live checks. Read the
 
 ## Related project and licence
 
-The original Hammerspoon Spoons remain a separate fallback project at
+The original Hammerspoon setup has been archived and is no longer a fallback.
+Its historical source remains at
 [window-management](https://github.com/theeseuus/window-management). This app does
 not require that checkout or a Hammerspoon runtime to build or run. The original
 comparison results are retained as frozen regression fixtures.

@@ -165,6 +165,7 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
                 let tools=AgentTools(library:library,apps:appLauncher,creation:creator,tiling:feature.controller);agentTools=tools
                 let direct=AgentDirectWindows(geometry:geometry!,stash:stash!,move:spaceMove!,accordion:accordion!);agentWindows=direct
                 tools.windowOperation={ [weak direct] request,context,window in guard let direct else{throw AgentFailure("unavailable","Window owners unavailable.")};return try await direct.perform(request,context:context,window:window)}
+                service.spaceMoveDiagnostic = {[weak self] in self?.spaceMove?.lastDiagnostic}
                 service.stashedWindowIDs = {[weak stash] in stash?.agentStashes() ?? []}
                 service.connectTools(query:{[weak tools] in guard let tools else{throw AgentFailure("unavailable","Tools unavailable.")};return try await tools.query($0)},mutate:{[weak tools] in guard let tools else{throw AgentFailure("unavailable","Tools unavailable.")};return try await tools.mutate($0)})
                 service.changed = { [weak self] in self?.settings?.refresh();self?.tiling?.controller.schedule() }

@@ -79,7 +79,7 @@ final class ShortcutReferenceWindow: NSObject {
         sections.append(section("SWITCHER NAVIGATION",[("","↑ / ↓","Previous / next window"),("","← / →","Previous / next desktop"),("","Return / Enter","Select window"),("","Escape","Close")]))
         sections.append(section("LAYOUT LIBRARY",[("","↑ / ↓","Select layout"),("","Space","Show / hide layout preview"),("⌥","↑ / ↓","Move layout up / down"),("","Return","Restore"),("⌘","Return","Establish"),("⌘","N","Capture"),("⌘","F","Search"),("⌘","I","Import"),("⇧⌘","E","Export"),("⌘","Delete","Delete layout"),("","Escape","Cancel or close"),("⌘",",","Settings"),("⌘","W","Close window"),("⌘","Q","Quit Window Factory")]))
         sections.append(section("TILING PANEL",[("","↑ / ↓","Select window"),("","− / +","Resize selected split"),("","V / H","Side by side / top-bottom"),("","B","Balance"),("","S","Swap with next tile"),("","F","Float / rejoin"),("","P","Pause / resume"),("","Escape","Close panel")]))
-        sections.append(section("HAMMERSPOON FALLBACK",[("⌃⌥⇧⌘","R","Open fallback library"),("⌃","← / →","Switch desktop (macOS)")]))
+        sections.append(section("MACOS DESKTOP NAVIGATION",[("⌃","← / →","Switch desktop (macOS)")]))
         text.string = sections.joined(separator:"\n\n")
         let body = NSMutableAttributedString(string:text.string,attributes:[.font:NSFont.monospacedSystemFont(ofSize:13,weight:.regular),.foregroundColor:NSColor.labelColor])
         let columns = NSMutableParagraphStyle()

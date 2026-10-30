@@ -15,6 +15,7 @@ final class AgentService {
     private var requestJobs: [UUID:UUID] = [:]
     private var activeJob: UUID?
     var stashedWindowIDs: ()->[UInt32] = {[]}
+    var spaceMoveDiagnostic: ()->SpaceMoveDiagnosticReport? = {nil}
     var extraBusy: ()->Bool = { false }
     var changed: (()->Void)?
     private(set) var enabled = false
@@ -43,7 +44,7 @@ final class AgentService {
     func stop() {enabled=false;generation=UUID();listener.stop();if activeJob != nil {library.task?.cancel()}}
     private var busy: Bool {library.task != nil || library.frozen != nil || extraBusy()}
     private func status() -> AgentStatus {
-        AgentStatus(instanceID:instanceID,agentAccess:enabled,accessibility:backend.accessibility(),busy:busy,desktops:backend.desktops(),stashedWindowIDs:stashedWindowIDs())
+        AgentStatus(instanceID:instanceID,agentAccess:enabled,accessibility:backend.accessibility(),busy:busy,desktops:backend.desktops(),stashedWindowIDs:stashedWindowIDs(),lastSpaceMove:spaceMoveDiagnostic())
     }
     func handle(_ data: Data) async -> AgentResponse {
         var request: AgentRequest?
