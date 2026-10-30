@@ -1,5 +1,34 @@
 # Source baseline
 
+## 2026-10-31 — Emacs Space-move cancellation, build 55
+
+The shared keyboard/agent move-and-follow controller now classifies input during
+an attempt instead of treating every session-wide key-down counter increment as
+intentional cancellation after dispatch. Matching move shortcuts do not interrupt
+or queue another move. Observed other keys and pointer presses still cancel;
+exact-window, desktop, membership and focus checks remain. If the scoped observer
+is unavailable, the original conservative keyboard-counter guard remains.
+CLI status exposes bounded event-origin metadata through diagnostic report schema
+2; see [the CLI contract](CLI.md#space-move-diagnostics).
+
+On macOS 27.2 with Emacs 32.0.50, the owner confirmed one ordinary-window keyboard
+move followed and retained focus. Build 55 independently verified destination
+membership/visibility and six consecutive foreground-focus samples in 516 ms.
+The global key-down counter increased by one, while the available scoped observer
+recorded no key-down event during the attempt. This supports delayed accounting
+of the initiating shortcut, but does not identify its producer or prove that
+mechanism. Earlier build-54 reports showed cancellation on a one-count increment
+both before follow and during focus restoration. Four sequential CLI moves on
+build 54 completed a two-desktop outward/return trip with focus and original
+frame preserved, without input-counter changes.
+
+Validation, signed build and the full fixture suite passed, including 83
+Space-movement and 83 agent CLI assertions. Layouts/settings and existing
+Accessibility/Agent access were preserved through installation. This is a scoped
+Emacs acceptance result, not broad regression acceptance of every control or a
+claim that all intermittent Space/focus issues are resolved. Hammerspoon remains
+archived.
+
 ## 2026-10-26 — standalone Window Factory repository
 
 Initial standalone source export of the accepted 0.2.0/build 48 application.
