@@ -94,6 +94,8 @@ final class DirectSpaceMoveControls {
     }
     private func perform(_ direction: Int,window: LiveWindow,context: Context,prepared: Prepared,diagnostic: SpaceMoveDiagnostics) async throws {
         let entries=prepared.entries,plan=prepared.plan,sourceWindows=prepared.sourceWindows,startingInput=prepared.input
+        let inputObserver=SpaceMoveInputObserver(trace:diagnostic)
+        defer {inputObserver.stop()}
         diagnostic.report.destinationSpace=plan.destination
                 var moved = false,followed = false
                 do {
@@ -107,7 +109,16 @@ final class DirectSpaceMoveControls {
                         try Task.checkCancellation()
                         let counts=inputCounts()
                         diagnostic.report.inputDeltas=zip(counts,startingInput).map{$0 &- $1}
-                        guard counts == startingInput else { diagnostic.report.failedCheck="new_input";throw FactoryError("New keyboard or pointer input; Space command stopped.") }
+                        let keyboardChanged=counts[0] != startingInput[0]
+                        let pointerChanged=Array(counts.dropFirst()) != Array(startingInput.dropFirst())
+                        diagnostic.report.inputObserverAvailable=inputObserver.available
+                        if keyboardChanged && diagnostic.report.inputEvents.isEmpty {diagnostic.report.unattributedKeyboardDelta=true}
+                        guard !SpaceMoveInputPolicy.cancels(keyboardChanged:keyboardChanged,pointerChanged:pointerChanged,
+                            moved:diagnostic.report.moveDispatched,observerAvailable:inputObserver.available,
+                            otherKeyObserved:inputObserver.otherKeyObserved,moveKeyObserved:inputObserver.moveKeyObserved) else {
+                            diagnostic.report.failedCheck=pointerChanged ? "pointer_input" : "keyboard_input"
+                            throw FactoryError("New keyboard or pointer input; Space command stopped.")
+                        }
                         guard (!workspaceBusy() || agentRunning),
                               NSRunningApplication(processIdentifier:window.pid)?.bundleIdentifier == window.bundleID,
                               NSRunningApplication(processIdentifier:window.pid)?.isHidden == false,

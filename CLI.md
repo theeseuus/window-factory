@@ -1,6 +1,6 @@
 # Window Factory CLI
 
-Version: 1.1
+Version: 1.2
 Updated: 2026-10-31
 
 `scripts/window-factory` (or the installed binary with `--cli`) provides JSON access to the running app's layout, application, tiling and direct window operations.
@@ -16,7 +16,7 @@ a logged-in macOS desktop session and the installed app's Accessibility access.
 Use **Settings → General → Agent access**. It defaults off. The CLI cannot turn
 itself on. Off removes the listener, rejects new requests and cancels the active
 CLI-owned job at the next cancellation check. Completed changes remain; disabling
-access is not an undo. Normal hotkeys and the Hammerspoon fallback are independent.
+access is not an undo. Normal hotkeys are independent; Hammerspoon is archived.
 The preference persists across app restarts; quitting stops the listener.
 
 The endpoint permits processes running as the current macOS user. It does not
@@ -193,8 +193,24 @@ requests and the final outcome/detail. `failedCheck` categorizes input,
 eligibility, topology or pre-move focus guards where available. A phase tells
 where the operation stopped, not the underlying app-specific cause.
 
-It piggybacks on existing movement observations: no background polling, stored
-history, window titles, document paths, key values or extra movement/focus
-requests. Inspect the report before another move; do not blindly retry a failed
-move because its first stage may already have completed. Diagnostic-only builds
-do not change timing, cancellation, retry or movement semantics.
+Report schema 2 also includes `inputObserverAvailable`, up to eight `inputEvents`
+with elapsed milliseconds, source PID, Quartz source-state ID, move-shortcut
+classification and autorepeat, plus `unattributedKeyboardDelta`. PID zero or a
+source-state value alone does not identify physical hardware or prove which
+remapper generated an event. Resolve a live nonzero PID separately if needed.
+No key codes, typed characters or modifier values are retained.
+
+A listen-only event tap exists only during each move, then is removed. It neither
+consumes nor synthesizes input. Pointer presses and observed non-move keys still
+cancel. Configured move shortcuts (including repeats) do not cancel the active
+move; they do not queue another move. Before dispatch, an unexplained key-count
+change still cancels. After dispatch, a counter-only keyboard change does not
+strand the window: follow and focus can finish while all existing exact-window,
+eligibility, topology, membership, desktop-context and pointer guards remain.
+If the event observer is unavailable or disabled, the original conservative
+keyboard-counter check remains in effect; no permission is requested by the CLI.
+The same policy applies to keyboard and agent requests.
+
+There is no disk history, background polling, window title or document path in
+the report. Inspect it before another move; do not blindly retry a failed move
+because its first stage may already have completed.

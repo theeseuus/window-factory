@@ -104,6 +104,35 @@ import Foundation
             let object=try JSONSerialization.jsonObject(with:encoded) as! [String:Any]
             check(object["title"] == nil && object["path"] == nil && object["keys"] == nil,"diagnostics contain no window title, path or pressed key values")
         }
+        // Regression: counter-only delivery after dispatch must not strand a
+        // moved window; real other-key/click intent still cancels at every phase.
+        for mode in ["counter-only","matching-repeat","other-key","pointer","observer-unavailable"] {
+            var moved=false,followed=false,finished=false,failed=false
+            let other=mode == "other-key",pointer=mode == "pointer",observed=mode != "observer-unavailable"
+            do {
+                try await SpaceMovement.perform(right,check:{phase in
+                    if moved && SpaceMoveInputPolicy.cancels(keyboardChanged:true,pointerChanged:pointer,moved:true,
+                        observerAvailable:observed,otherKeyObserved:other,moveKeyObserved:mode == "matching-repeat") {
+                        throw FactoryError("Fixture deliberate input")
+                    }
+                },move:{moved=true;return true},membership:{[20]},follow:{followed=true;return true},destinationVisible:{true},finish:{
+                    try await SpaceMovement.restoreFocus(check:{
+                        if SpaceMoveInputPolicy.cancels(keyboardChanged:true,pointerChanged:pointer,moved:true,
+                            observerAvailable:observed,otherKeyObserved:other,moveKeyObserved:mode == "matching-repeat") {throw FactoryError("Fixture input")}
+                    },request:{},focused:{true},pause:{})
+                    finished=true
+                },pause:{})
+            } catch {failed=true}
+            let success=["counter-only","matching-repeat"].contains(mode)
+            check(failed != success && followed == success && finished == success,"classified cancellation through full movement/focus pipeline: \(mode)")
+        }
+        check(SpaceMoveInputPolicy.cancels(keyboardChanged:true,pointerChanged:false,moved:false,observerAvailable:true,otherKeyObserved:false,moveKeyObserved:false),"unclassified new keyboard count still stops before dispatch")
+        check(!SpaceMoveInputPolicy.cancels(keyboardChanged:true,pointerChanged:false,moved:false,observerAvailable:true,otherKeyObserved:false,moveKeyObserved:true),"matching move shortcut is not deliberate cancellation")
+        check(SpaceMoveInputPolicy.cancels(keyboardChanged:false,pointerChanged:false,moved:true,observerAvailable:true,otherKeyObserved:true,moveKeyObserved:true),"observed other key cancels even before counter delivery")
+        check(SpaceMoveInputPolicy.cancels(keyboardChanged:false,pointerChanged:true,moved:true,observerAvailable:true,otherKeyObserved:false,moveKeyObserved:true),"pointer selection always cancels")
+        let metadata=SpaceMoveInputEvent(elapsedMS:12,sourcePID:123,sourceStateID:1,matchesMoveShortcut:true,isRepeat:false)
+        let json=try JSONEncoder().encode(metadata)
+        check(try JSONDecoder().decode(SpaceMoveInputEvent.self,from:json)==metadata,"event origin/classification round trips without raw key values")
         print("native Space movement: \(assertions) assertions passed; no desktop queries or mutations")
     }
 }

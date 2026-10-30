@@ -1,6 +1,6 @@
 # Usage and shortcuts
 
-Version: 1.7
+Version: 1.8
 Updated: 2026-10-31
 
 The library captures app identities and normalized window geometry. It does not
@@ -99,4 +99,9 @@ Movement, following the destination and restoring focus are separately verified.
 A failure can leave a window moved even when the desktop did not follow. Before
 retrying, check where the window actually is. Agent access can read the latest
 structured report through `status`; see [the diagnostic contract](../CLI.md#space-move-diagnostics).
-The report does not change how controls behave and contains no document contents.
+The report contains no document contents or typed characters. During a move,
+matching move shortcuts do not interrupt the active operation or queue repeats.
+Other observed keys and pointer presses still cancel. A session-wide keyboard
+count alone does not stop an already-dispatched move when event observation is
+available; desktop and exact-window verification remain required. This is shared
+by the keyboard and agent CLI paths.

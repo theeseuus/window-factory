@@ -1,7 +1,7 @@
 import Foundation
 
 struct SpaceMoveDiagnosticReport: Codable, Equatable {
-    var schemaVersion = 1
+    var schemaVersion = 2
     var attemptID = UUID()
     var startedAt = Date()
     var macOS = ProcessInfo.processInfo.operatingSystemVersionString
@@ -28,6 +28,9 @@ struct SpaceMoveDiagnosticReport: Codable, Equatable {
     var targetVisible: Bool?
     var sourceWindowsHidden: Bool?
     var inputDeltas: [UInt32]?
+    var inputObserverAvailable = false
+    var inputEvents: [SpaceMoveInputEvent] = []
+    var unattributedKeyboardDelta = false
     var ignoredMoveRequests = 0
     var focusRequests = 0
     var focusObservations = 0
@@ -57,5 +60,26 @@ final class SpaceMoveDiagnostics {
     }
     func finish(_ outcome: String,detail: String? = nil) {
         report.outcome=outcome;report.detail=detail;report.elapsedMS=elapsed
+    }
+}
+
+// Classification only: never retain the key code, text or document context.
+struct SpaceMoveInputEvent: Codable, Equatable {
+    var elapsedMS: Int
+    var sourcePID: Int32
+    var sourceStateID: Int64
+    var matchesMoveShortcut: Bool
+    var isRepeat: Bool
+}
+enum SpaceMoveInputPolicy {
+    static func cancels(keyboardChanged: Bool,pointerChanged: Bool,moved: Bool,
+        observerAvailable: Bool,otherKeyObserved: Bool,moveKeyObserved: Bool) -> Bool {
+        if pointerChanged || otherKeyObserved { return true }
+        guard keyboardChanged else { return false }
+        // A global counter is not proof of user intent. Once movement has been
+        // dispatched, finish follow/focus unless a classified event says otherwise.
+        // If observation is unavailable, retain the original conservative guard.
+        if !observerAvailable { return true }
+        return !moved && !moveKeyObserved
     }
 }
