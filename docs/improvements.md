@@ -1,7 +1,7 @@
 # Improvement requests
 
-Version: 2.1
-Updated: 2026-11-01
+Version: 2.2
+Updated: 2026-11-02
 
 ## Setup once, then send
 
@@ -95,6 +95,9 @@ authorization to start work without an explicit Send.
 Shared source belongs in the standalone Improvements repository. The consumer's
 Modules/Improvements snapshot is generated, signed/pinned and integrity-checked.
 Tests use isolated provider/socket fixtures; do not use live data or clipboard in
-them. A synthetic direct-send marker passed in an existing desktop chat; complete
-consumer setup/callback and new-project visibility require their own live checks.
+them. On 2026-11-02, owner setup, direct UI Send and a separately approved CLI Send
+with the Improvements window closed all passed. Both returned exact receipt IDs,
+linked the selected Window Factory chat and appended their exact no-code outcome
+notes to their original requests. New-project/new-chat sidebar visibility still
+requires a separate live pilot.
 Future app-context collection must be visible, bounded and owner-controlled.
