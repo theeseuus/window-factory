@@ -5,7 +5,7 @@ enum AgentCLI {
     static let help = """
     Window Factory CLI (JSON; running app and Agent access required)
       window-factory status | capabilities | layouts | apps | tiling-status | layout-export
-      window-factory improvement-agent [--repository PATH]
+      window-factory improvement-agent [--repository PATH [--codex-project ID]]
       window-factory improvement-open --improvement UUID
       window-factory improvement-link --improvement UUID --handoff UUID --thread UUID
         Open prepares a visible Codex chat; press Send there to start. Link is its agent callback.
@@ -52,6 +52,7 @@ enum AgentCLI {
             case "--handoff":guard let id=UUID(uuidString:value) else{throw AgentFailure("invalid_arguments","Invalid handoff ID.")};request.handoffID=id
             case "--thread":guard let id=UUID(uuidString:value) else{throw AgentFailure("invalid_arguments","Invalid chat ID.")};request.threadID=id
             case "--repository":request.repository=value
+            case "--codex-project":request.codexProjectID=value
             case "--text":request.text=value
             case "--context":request.context=value
             case "--state":request.state=value

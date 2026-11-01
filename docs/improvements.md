@@ -1,6 +1,6 @@
 # Improvement requests — Window Factory pilot
 
-Version: 1.5
+Version: 1.6
 Updated: 2026-11-01
 
 ## Two connected places
@@ -168,10 +168,26 @@ behaviour; unrelated diagnostic changes may be developed separately.
 ## Coding-mode routing
 
 Build 65 explicitly supplies `mode=codex` alongside the selected repository path.
-The installed desktop handler resolves that path to its saved local project;
-without an explicit mode, the same link could inherit ChatGPT and create an
-intermediate conversation. The shared prompt now checks the coding workspace
+The live pilot showed mode selection works, but path-only routing can retain
+the previous project. Build 66 therefore also requires an explicit saved-project
+binding; an unbound request stays saved and no composer is opened. The shared prompt now checks the coding workspace
 and saved-project membership before linking and product work. It must report a
 routing blocker rather than create another Work chat or silently work projectless.
 These desktop parameters are version-sensitive; validate after app updates with
 ChatGPT selected, one synthetic request, actual project membership and repo checks.
+
+## One-time saved-project binding
+
+Match the repository's canonical path against Codex desktop `list_projects`, then
+configure the returned saved-project ID with the same repository through
+`improvement-agent --repository PATH --codex-project ID`. This is application
+routing metadata, not an account or model identity change. Do not infer IDs from
+project names, inspect authentication state or create a new project silently.
+
+The configured `codexProjectID` is persisted beside the existing repository
+setting. Selecting the same repository preserves its binding; selecting a
+different repository clears it. Missing binding fails with `codex_project_required`
+before creating a handoff or opening a composer. Old configuration files still
+load and existing linked-chat opening/history remain available. The same source
+request and handoff can be retried after correcting setup; never restart work in
+an already-linked chat by creating another task.

@@ -44,7 +44,7 @@ struct AgentRequest: Codable, Equatable {
   var names: [String]?, catalog: Catalog?, confirm: Bool?
   var improvementID: UUID?, text: String?, context: String?, state: String?, note: String?
   var revision: Int?, targetBuild: Int?, offset: Int?
-  var repository: String?
+  var repository: String?, codexProjectID: String?
   var handoffID: UUID?, threadID: UUID?
   func validate() throws {
     guard version == 1 else { throw AgentFailure("unsupported_version", "Use protocol version 1.") }
@@ -89,6 +89,7 @@ struct AgentRequest: Codable, Equatable {
     if handoffID != nil { supplied.insert("handoffID") }
     if threadID != nil { supplied.insert("threadID") }
     if repository != nil { supplied.insert("repository") }
+    if codexProjectID != nil { supplied.insert("codexProjectID") }
     if improvementID != nil { supplied.insert("improvementID") }
     if text != nil { supplied.insert("text") }
     if context != nil { supplied.insert("context") }
@@ -100,7 +101,13 @@ struct AgentRequest: Codable, Equatable {
     let allowed: Set<String>
     switch command {
     case .improvementAgent:
-      allowed = ["repository"]
+      allowed = ["repository", "codexProjectID"]
+      if let codexProjectID {
+        guard repository != nil, !codexProjectID.isEmpty, codexProjectID.utf8.count <= 256,
+              !codexProjectID.unicodeScalars.contains(where:CharacterSet.whitespacesAndNewlines.union(.controlCharacters).contains) else {
+          throw AgentFailure("invalid_codex_project", "Supply a repository and its verified saved Codex project ID.")
+        }
+      }
       if let repository, repository.isEmpty || repository.utf8.count > 4096 || !repository.hasPrefix("/") {
         throw AgentFailure("invalid_repository", "Supply an absolute repository path.")
       }
@@ -227,7 +234,7 @@ struct AgentRequest: Codable, Equatable {
       "version", "id", "command", "name", "display", "space", "jobID", "replace", "instanceID",
       "bundleID", "action", "geometry", "axis", "newName", "windowID", "direction", "splitID",
       "ratio", "gap", "margin", "names", "catalog", "confirm",
-      "improvementID", "text", "context", "state", "note", "revision", "targetBuild", "offset", "repository", "handoffID", "threadID",
+      "improvementID", "text", "context", "state", "note", "revision", "targetBuild", "offset", "repository", "codexProjectID", "handoffID", "threadID",
     ]
     guard let fields = object as? [String: Any], Set(fields.keys).isSubset(of: allowed) else {
       throw AgentFailure("invalid_request", "Unknown request fields.")

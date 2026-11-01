@@ -1,5 +1,14 @@
 # Source baseline
 
+## 2026-11-01 — bind the saved Codex project, build 66
+
+The build-65 live pilot opened a coding chat but retained the previously selected
+Improvements repository. Explicit saved-project ID preview selected Window Factory
+correctly. Require that binding for new handoffs, configure it through the existing
+CLI, preserve it for the same repository and clear it when repositories change.
+Missing bindings open no composer; existing linked chats and history remain usable.
+
+
 ## 2026-11-01 — explicit Codex routing, build 65
 
 Update the pinned Improvements module to request Codex mode explicitly when

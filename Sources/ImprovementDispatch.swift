@@ -4,7 +4,10 @@ import Darwin
 struct ImprovementAgentConfiguration: Codable {
     var repository: String?
     let runner: String
-    init(repository: String? = nil) {self.repository = repository; runner = "codex-desktop"}
+    let codexProjectID: String?
+    init(repository: String? = nil, codexProjectID: String? = nil) {
+        self.repository = repository; self.codexProjectID = codexProjectID; runner = "codex-desktop"
+    }
 }
 struct ImprovementWorkerStarted: Codable {let workerPID: Int32, agentPID: Int32, date: Date}
 
@@ -57,9 +60,18 @@ final class ImprovementDispatcher {
         guard ["codex-ai","codex-desktop"].contains(value.runner) else {throw AgentFailure("unsupported_runner", "Select the Codex desktop handoff for this build.")}
         return value
     }
-    func configure(repository: String) throws -> ImprovementAgentConfiguration {
+    func configure(repository: String, codexProjectID: String? = nil) throws -> ImprovementAgentConfiguration {
         let url = try ImprovementRepository.validate(repository)
-        let value = ImprovementAgentConfiguration(repository:url.path)
+        if let codexProjectID {
+            guard !codexProjectID.isEmpty, codexProjectID.utf8.count <= 256,
+                  !codexProjectID.unicodeScalars.contains(where:CharacterSet.whitespacesAndNewlines.union(.controlCharacters).contains) else {
+                throw AgentFailure("invalid_codex_project", "Supply the verified saved Codex project ID.")
+            }
+        }
+        let previous = try configuration()
+        // Repository changes invalidate the old binding; selecting the same repo preserves it.
+        let binding = codexProjectID ?? (previous.repository == url.path ? previous.codexProjectID : nil)
+        let value = ImprovementAgentConfiguration(repository:url.path,codexProjectID:binding)
         try ImprovementFiles.write(value,to:configurationURL); changed?(); return value
     }
     func reconcile(now: Date = Date()) throws {
@@ -101,13 +113,17 @@ final class ImprovementDispatcher {
             guard openURL(ImprovementHandoffLink.chatURL(threadID)) else {throw AgentFailure("codex_open_failed", "Could not open the linked Codex chat. The request is preserved.")}
             return original
         }
-        guard let path = try configuration().repository else {throw AgentFailure("repository_required", "Choose the Window Factory repository before opening Codex.")}
+        let config = try configuration()
+        guard let path = config.repository else {throw AgentFailure("repository_required", "Choose the Window Factory repository before opening Codex.")}
         let repo = try ImprovementRepository.validate(path)
+        guard let projectID = config.codexProjectID else {
+            throw AgentFailure("codex_project_required", "The Codex project is not linked. Complete project setup before sending; your request is saved.")
+        }
         guard !(try store.all()).contains(where:{$0.runs?.contains(where:{$0.active}) == true}) else {
             throw AgentFailure("agent_busy", "A previous background run is still active. Finish it before opening a new request.")
         }
         let handoff = try store.prepareHandoff(id,handoffID:operationID,repository:repo.path)
-        let url = try ImprovementHandoffLink.newChatURL(request:original,handoff:handoff)
+        let url = try ImprovementHandoffLink.newChatURL(request:original,handoff:handoff,projectID:projectID)
         guard openURL(url) else {
             try store.failHandoff(id,handoffID:handoff.id)
             throw AgentFailure("codex_open_failed", "Could not open Codex. Your request is saved; no model was started.")
@@ -124,7 +140,7 @@ final class ImprovementDispatcher {
     func handle(_ request: AgentRequest) throws -> AgentToolResult {
         switch request.command {
         case .improvementAgent:
-            let config = try request.repository.map {try configure(repository:$0)} ?? configuration()
+            let config = try request.repository.map {try configure(repository:$0,codexProjectID:request.codexProjectID)} ?? configuration()
             return AgentToolResult(improvementAgent:config)
         case .improvementDispatch:
             throw AgentFailure("background_dispatch_disabled", "Use improvement-open for a visible Codex handoff, then press Send in Codex. Background dispatch is no longer offered.")

@@ -21,6 +21,14 @@ enum ImprovementHandoffTests {
         rejects("repository_required") {_ = try dispatcher.openRequest(first.id)}
         check(opened.isEmpty,"missing repository cannot open another workspace")
         _ = try dispatcher.configure(repository:repo.path)
+        rejects("codex_project_required") {_ = try dispatcher.openRequest(first.id)}
+        check(try opened.isEmpty && store.get(first.id).handoffs == nil,"missing project binding opens no composer and creates no handoff")
+        _ = try dispatcher.configure(repository:repo.path,codexProjectID:"fixture-project")
+        check(try dispatcher.configure(repository:repo.path).codexProjectID == "fixture-project","selecting the same repository preserves its project binding")
+        let otherRepo = fixture.appendingPathComponent("other-repo")
+        try FileManager.default.copyItem(at:repo,to:otherRepo)
+        check(try dispatcher.configure(repository:otherRepo.path).codexProjectID == nil,"changing repositories clears the previous project binding")
+        _ = try dispatcher.configure(repository:repo.path,codexProjectID:"fixture-project")
         _ = try dispatcher.openRequest(first.id)
         let prepared = try store.get(first.id), handoff = prepared.handoffs!.last!
         check(prepared.state == .queued && prepared.revision == 0 && prepared.runs == nil,"opening a composer is not working or a background run")
@@ -30,6 +38,7 @@ enum ImprovementHandoffTests {
         check(components.scheme == "codex" && components.host == "threads" && components.path == "/new","uses documented new-chat route")
         check(query["path"] == repo.resolvingSymlinksInPath().path,"workspace path survives URL encoding")
         check(query["mode"] == "codex", "handoff explicitly selects coding mode instead of inheriting ChatGPT")
+        check(query["projectId"] == "fixture-project","handoff selects the bound saved project explicitly")
         check(!opened[0].absoluteString.contains("+"),"literal plus signs are safe for both URLComponents and form-style query decoders")
         check(query["prompt"]!.contains("A & B + C?") && query["prompt"]!.contains("$(do not execute) 😀"),"request remains data and survives URL encoding")
         check(query["prompt"]!.contains(handoff.id.uuidString) && query["prompt"]!.contains("CODEX_THREAD_ID") && query["prompt"]!.contains("improvement-link"),"prepared prompt carries stable callback IDs and current-chat discovery")
@@ -73,19 +82,21 @@ enum ImprovementHandoffTests {
         let capabilitiesRequest = AgentRequest(command:.capabilities)
         let capabilities = await service.handle(try JSONEncoder().encode(capabilitiesRequest)).result!.commands!
         check(capabilities.contains("improvement-open") && capabilities.contains("improvement-link") && !capabilities.contains("improvement-dispatch"),"capabilities advertise visible handoff rather than retired background execution")
+        let configurationReply = try await call(["improvement-agent","--repository",repo.path,"--codex-project","fixture-project"])
+        check(configurationReply.result?.tools?.improvementAgent?.codexProjectID == "fixture-project","CLI config roundtrip retains the explicit project binding")
         let background = try await call(["improvement-dispatch","--improvement",second.id.uuidString])
         check(background.code == "background_dispatch_disabled","old command cannot silently launch a headless model")
         let linkReply = try await call(["improvement-link","--improvement",second.id.uuidString,"--handoff",secondHandoff.id.uuidString,"--thread",UUID().uuidString])
         check(linkReply.ok && linkReply.result?.tools?.improvement?.handoffs?.last?.threadID != nil,"CLI callback links the actual chat through the shared store")
         let outcome = try await call(["improvement-update","--improvement",second.id.uuidString,"--revision","1","--state","implemented","--note","Fixture change verified and committed", "--target-build","60"])
         check(outcome.ok && outcome.result?.tools?.improvement?.status(runningBuild:59).contains("awaiting build 60") == true,"outcome callback updates app without claiming installation")
-        for args in [["improvement-open"],["improvement-link","--improvement",second.id.uuidString],["improvement-link","--improvement",second.id.uuidString,"--handoff","bad","--thread",chat.uuidString],["improvement-open","--improvement",second.id.uuidString,"--wait"]] {
+        for args in [["improvement-agent","--codex-project","unbound"],["improvement-agent","--repository",repo.path,"--codex-project","bad id"],["improvements","--codex-project","unexpected"],["improvement-open"],["improvement-link","--improvement",second.id.uuidString],["improvement-link","--improvement",second.id.uuidString,"--handoff","bad","--thread",chat.uuidString],["improvement-open","--improvement",second.id.uuidString,"--wait"]] {
             do {_ = try AgentCLI.parse(args); check(false,"invalid handoff fields accepted")} catch {check(true,"strict handoff args rejected")}
         }
         // Actual hidden AppKit actions: Save never opens; Open only prepares the URL.
         let uiStore = ImprovementStore(url:fixture.appendingPathComponent("ui/requests.json"),version:"test",build:"59")
         let uiDispatcher = ImprovementDispatcher(store:uiStore,watch:false)
-        _ = try uiDispatcher.configure(repository:repo.path)
+        _ = try uiDispatcher.configure(repository:repo.path,codexProjectID:"fixture-project")
         var uiURLs: [URL] = []; uiDispatcher.openURL = {uiURLs.append($0); return true}
         let presentationSuite = "WindowFactory.ImprovementPresentationTest.\(UUID().uuidString)"
         let presentationDefaults = UserDefaults(suiteName:presentationSuite)!

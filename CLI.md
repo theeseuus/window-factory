@@ -1,6 +1,6 @@
 # Window Factory CLI
 
-Version: 1.7
+Version: 1.8
 Updated: 2026-11-01
 
 `scripts/window-factory` (or the installed binary with `--cli`) provides JSON access to the running app's layout, application, tiling and direct window operations.
@@ -291,3 +291,20 @@ route. Unknown improvement IDs return `improvement_not_found`; invalid content
 returns `invalid_improvement`. Corrupt/unsupported catalog data is never reset or
 overwritten; reads/writes fail explicitly. See [the pilot workflow](docs/improvements.md)
 for recovery, progress semantics and the verified desktop-integration boundary.
+
+## Codex project binding (build 66)
+
+`improvement-agent --repository PATH --codex-project ID` binds the selected source
+repository to its saved local Codex project. Both values are required when setting
+a binding. Obtain ID from the desktop project-list tool and verify its canonical
+path matches PATH; project names alone are not sufficient. The app cannot verify
+the desktop registry through its local callback transport, so setup must establish
+that association before sending requests. The handoff chat independently verifies
+its actual workspace and membership before product work.
+
+Calling `improvement-agent` without options reads the current configuration,
+including optional `codexProjectID`. A repository-only update preserves the ID for
+the same repository and clears it for a changed repository. New handoffs require
+the binding (`codex_project_required` if missing); this command does not change
+credentials, macOS permissions or the selected model. Use normal local IPC approval
+review for a sandbox-denied setup call; never edit the app's data files directly.

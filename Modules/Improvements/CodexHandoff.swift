@@ -85,16 +85,15 @@ public enum ImprovementHandoffLink {
         \(body)
         """
     }
-    public static func newChatURL(request: Improvement, handoff: ImprovementHandoff, application: ImprovementApplication, projectID: String? = nil) throws -> URL {
+    public static func newChatURL(request: Improvement, handoff: ImprovementHandoff, application: ImprovementApplication, projectID: String) throws -> URL {
         var components = URLComponents()
         components.scheme = "codex"; components.host = "threads"; components.path = "/new"
         components.queryItems = [URLQueryItem(name:"mode",value:"codex"),URLQueryItem(name:"path",value:handoff.repository),URLQueryItem(name:"prompt",value:try prompt(request:request,handoff:handoff,application:application))]
-        if let projectID {
-            guard !projectID.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else {
-                throw ImprovementFailure("invalid_handoff", "A supplied Codex project ID must not be blank.")
-            }
-            components.queryItems?.append(URLQueryItem(name:"projectId",value:projectID))
+        guard !projectID.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,
+              projectID.utf8.count <= 256, !projectID.unicodeScalars.contains(where:CharacterSet.whitespacesAndNewlines.union(.controlCharacters).contains) else {
+            throw ImprovementFailure("invalid_handoff", "Supply the verified saved Codex project ID.")
         }
+        components.queryItems?.append(URLQueryItem(name:"projectId",value:projectID))
         // URLSearchParams-style decoders treat raw '+' as a space. Preserve it as data.
         components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of:"+",with:"%2B")
         guard let url = components.url else {throw ImprovementFailure("invalid_handoff", "Could not construct a Codex handoff URL.")}
