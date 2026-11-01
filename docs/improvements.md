@@ -1,6 +1,6 @@
 # Improvement requests — Window Factory pilot
 
-Version: 1.2
+Version: 1.3
 Updated: 2026-11-01
 
 ## Two connected places
@@ -51,8 +51,10 @@ diagnostics: the last move report is in memory and another move/restart replaces
 it. The app preserves the original wording and context; updates append to history.
 
 If Codex cannot be opened, the request stays saved and shows the failure. The app
-never substitutes a background model. If the agent cannot link, it must explain
-the blocker in the chat and stop before changing code. Agent access remains
+never substitutes a background model. A sandbox-blocked local IPC callback uses
+the normal tool approval/review flow and one retry of the same operation. If
+review is rejected or linking remains unavailable, the agent explains the blocker
+in the coding chat and stops before product work. Agent access remains
 owner-controlled in Settings; opening the handoff does not enable it. Link/outcome
 callbacks need the running app and existing Agent access. If the app is closed,
 the coding chat can continue; callbacks can be retried after reopening it.
@@ -70,8 +72,23 @@ Before investigation or code changes, read only the executor's non-secret
 inspect authentication/session files, guess an ID or use another chat's ID.
 Call `scripts/window-factory improvement-link --improvement REQUEST_UUID --handoff
 HANDOFF_UUID --thread CURRENT_CHAT_UUID`, using the IDs supplied in the prepared
-prompt. If it fails, explain the blocker in the chat and stop. A different chat
-cannot replace an already linked handoff. A chat already linked to another request
+prompt. If the tool sandbox blocks the local callback (such as transport_error,
+errno 1), request normal tool approval/escalation in that coding chat and retry
+the same callback once. Keep the request, handoff and current chat IDs unchanged.
+This does not authorize a permission-grant, identity or configuration change, a
+sandbox/hook bypass, or an alternate transport after rejection. Do not stop merely
+because the first sandboxed attempt was denied; normal review belongs in that
+same chat, with no return to the initiating chat needed for an ordinary retry.
+
+If review is rejected, the approved retry still fails, approval is unavailable,
+the app is not running, Agent access is off or the chat ID is missing, explain
+the blocker and stop before product work. Proceed only on a successful link
+response. The same bounded retry applies to request reads and outcome callbacks.
+For writes, generate one request UUID before the first attempt and reuse the
+identical UUID/payload/revision on retry. If a final outcome cannot be delivered,
+retain completed work, explain its result and the callback blocker in the chat,
+and do not repeat implementation, edit the data file, or claim the app was updated.
+A different chat cannot replace an already linked handoff. A chat already linked to another request
 cannot accidentally claim this one. Identical callbacks are idempotent.
 
 Investigate the intended outcome, consider existing capabilities and app coherence,
@@ -81,8 +98,9 @@ resetting or absorbing another task's changes. Follow the normal checks and CLI
 parity contract. For completed code changes, increment the build and finish with
 a signature-verified local `machine-agent-git owner-commit`.
 
-Read the current revision with `improvements --improvement UUID` before each
-`improvement-update`. Record needs-input, implemented or declined with a useful
+Read the current record with `improvements --improvement UUID` before each
+`improvement-update`. Its numeric revision is the number of entries in
+`improvement.updates`, not the UUID of an update. Record needs-input, implemented or declined with a useful
 note. For implemented, supply `--target-build N` and describe the change, checks,
 exact commit and uncertainty. Keep discussion in this same Codex chat, and update
 the app as well as replying to the owner. Never edit the request catalog directly.

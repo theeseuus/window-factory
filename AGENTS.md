@@ -1,6 +1,6 @@
 # Working on Window Factory
 
-Version: 1.3
+Version: 1.4
 Updated: 2026-11-01
 
 - Read README.md and task-relevant docs before editing; inspect Git status.
@@ -9,7 +9,10 @@ Updated: 2026-11-01
   Work on a request only when the owner sends it or explicitly asks to pick it up.
   For a desktop handoff, link the current chat using improvement-link before
   product work, then keep progress/outcome notes updated with improvement-update.
-  If linking fails, explain the blocker in the chat and stop before code changes.
+  If the tool sandbox blocks local callback IPC, use normal approval review and
+  retry the same callback once without changing grants or bypassing policy. Stop
+  before product work if review is rejected or linking remains unavailable.
+  Apply the same bounded retry to reads/outcome notes and report unresolved failures.
   Historical background runs retain their separate receipt/recovery ownership.
 - Keep layout/store/coordinator, app adapters, system bridge and UI responsibilities
   separate. Reviewed creation operations belong in Resources/adapters.json.

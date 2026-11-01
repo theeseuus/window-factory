@@ -32,6 +32,13 @@ enum ImprovementHandoffTests {
         check(!opened[0].absoluteString.contains("+"),"literal plus signs are safe for both URLComponents and form-style query decoders")
         check(query["prompt"]!.contains("A & B + C?") && query["prompt"]!.contains("$(do not execute) 😀"),"request remains data and survives URL encoding")
         check(query["prompt"]!.contains(handoff.id.uuidString) && query["prompt"]!.contains("CODEX_THREAD_ID") && query["prompt"]!.contains("improvement-link"),"prepared prompt carries stable callback IDs and current-chat discovery")
+        let prompt = query["prompt"]!
+        let retryPosition = prompt.range(of:"request normal tool approval/escalation")!.lowerBound
+        let stopPosition = prompt.range(of:"If review is rejected")!.lowerBound
+        let workPosition = prompt.range(of:"Investigate the intended outcome")!.lowerBound
+        check(retryPosition < stopPosition && stopPosition < workPosition && prompt.contains("retry the same callback once"),"local sandbox denial reaches bounded normal review before the stop/product-work gates")
+        check(prompt.contains("without changing permission grants") && prompt.contains("Continue product work only after improvement-link returns a successful response") && prompt.contains("evade a rejection"),"retry guidance retains grant boundaries, rejection stop and successful-link requirement")
+        check(prompt.contains("applies to request reads and outcome callbacks") && prompt.contains("number of entries in improvement.updates") && prompt.contains("Do not claim the app received an unconfirmed note"),"read/outcome retries and truthful delivery include an unambiguous numeric revision")
         _ = try dispatcher.openRequest(first.id)
         check(try store.get(first.id).handoffs?.count == 1,"reopening an unsent handoff retains its callback token")
         let chat = UUID()

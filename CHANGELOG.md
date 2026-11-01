@@ -1,5 +1,26 @@
 # Source baseline
 
+## 2026-11-01 — normal approval retry in handoff prompts, build 60
+
+A real desktop handoff reached the correct repository but stopped when the tool
+sandbox blocked local callback IPC (transport_error, errno 1). The same chat linked
+and continued after an owner-authorized normal-approval retry; no permission
+grants or product code were changed by that retry.
+
+Future prepared prompts now direct the agent to request normal tool approval and
+retry the same local callback once, including request reads and outcome notes.
+A review rejection or failed approved retry still stops product work before an
+unconfirmed link; no identity/grant changes or bypasses are authorized. Stable
+write IDs prevent duplicate notes. The prompt also defines the numeric revision
+as the updates-array length rather than an event UUID. The callback API, stored
+requests and Space-move implementation are unchanged.
+
+Source validation, the full native suite (including 37 handoff assertions) and
+the signed build passed. Prompt regressions check bounded review-before-stop
+ordering, successful-link gating, unchanged grant boundaries, callback delivery
+reporting and numeric revision guidance. Model adherence to future prompts still
+depends on the coding chat; no approval bypass is implemented.
+
 ## 2026-11-01 — visible Codex handoff and linked outcomes, build 59
 
 Adds Open in Codex and Open selected in Codex: requests open the documented

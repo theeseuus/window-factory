@@ -1,6 +1,6 @@
 # Window Factory CLI
 
-Version: 1.5
+Version: 1.6
 Updated: 2026-11-01
 
 `scripts/window-factory` (or the installed binary with `--cli`) provides JSON access to the running app's layout, application, tiling and direct window operations.
@@ -260,7 +260,14 @@ needed, and agents must use the API instead of writing the file themselves.
 
 Agent callbacks require the running app and Agent access. The prepared prompt
 instructs the agent to obtain only the non-secret `CODEX_THREAD_ID` executor value,
-link first, and stop before code changes if linking fails. It then follows normal
+link first, and use normal approval review plus one identical retry if the tool
+sandbox blocks local callback IPC (for example transport_error, errno 1). Review
+rejection or a failed approved retry stops product work; no permission grants,
+identity changes, bypasses or alternate transport are authorized. This also applies
+to reads and outcome callbacks. Use a stable `--request-id` and unchanged payload
+for a write retry. The current numeric revision is `improvement.updates.count`,
+not an update UUID. Unresolved outcome failures are reported in the coding chat
+without repeating implementation or claiming delivery. It then follows normal
 repository policy, keeps notes in the app with revision-checked improvement-update,
 and discusses work in the native desktop chat. Installation/publication are separate.
 
