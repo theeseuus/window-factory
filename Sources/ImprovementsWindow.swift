@@ -6,12 +6,13 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
     let store: ImprovementStore
     private let dispatcher: ImprovementDispatcher?
     private let agentLabel = NSTextField(wrappingLabelWithString:"")
-    private let sendSelectedButton = NSButton(title:"Send selected now",target:nil,action:nil)
+    private let openChatButton = NSButton(title:"Open chat",target:nil,action:nil)
+    private let sendSelectedButton = NSButton(title:"Open selected in Codex…",target:nil,action:nil)
     private let input = NSTextView()
     private let contextField = NSTextField(string:"")
     private let table = NSTableView()
     private let detail = NSTextView()
-    private let message = NSTextField(wrappingLabelWithString:"Save for later, or send to Codex to start work in the repository now.")
+    private let message = NSTextField(wrappingLabelWithString:"Save for later, or open a Codex chat. Press Send in Codex to start work.")
     private let copyButton = NSButton(title:"Copy selected request for agent", target:nil, action:nil)
     private var rows: [Improvement] = []
     private var draftID = UUID()
@@ -32,7 +33,7 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         let build = NSTextField(labelWithString:"Window Factory \(store.version) · Build \(store.build)")
         build.textColor = .secondaryLabelColor
         let save = NSButton(title:"Save for later",target:self,action:#selector(saveForLater)); save.bezelStyle = .rounded
-        let send = NSButton(title:"Send to agent now",target:self,action:#selector(sendNow)); send.bezelStyle = .rounded
+        let send = NSButton(title:"Open in Codex…",target:self,action:#selector(sendNow)); send.bezelStyle = .rounded
         send.isEnabled = dispatcher != nil
         let actions = NSStackView(views:[build,NSView(),save,send]); actions.spacing = 12
         agentLabel.textColor = .secondaryLabelColor; agentLabel.font = .systemFont(ofSize:12)
@@ -51,7 +52,9 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         copyButton.target = self; copyButton.action = #selector(copyRequest); copyButton.bezelStyle = .rounded
         let refresh = NSButton(title:"Refresh",target:self,action:#selector(refreshHistory)); refresh.bezelStyle = .rounded
         sendSelectedButton.target = self; sendSelectedButton.action = #selector(sendSelected); sendSelectedButton.bezelStyle = .rounded
-        let footer = NSStackView(views:[sendSelectedButton,copyButton,refresh]); footer.spacing = 8
+        openChatButton.target = self; openChatButton.action = #selector(openLinkedChat); openChatButton.bezelStyle = .rounded
+        copyButton.title = "Copy request"
+        let footer = NSStackView(views:[openChatButton,sendSelectedButton,copyButton,refresh]); footer.spacing = 8
         let stack = NSStackView(views:[prompt,hint,inputScroll,contextLabel,contextField,actions,agentRow,message,historyLabel,history,detailScroll,footer])
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false; window.contentView!.addSubview(stack)
@@ -101,15 +104,19 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         catch {message.stringValue = "Could not save: \(error.localizedDescription)"}
     }
     @objc private func sendSelected() {if let selected {send(selected.id)}}
+    @objc private func openLinkedChat() {
+        guard let selected, let dispatcher else {return}
+        do {try dispatcher.openChat(selected.id)} catch {message.stringValue = error.localizedDescription}
+    }
     private func send(_ id: UUID) {
         guard let dispatcher else {return}
         do {
             if try dispatcher.configuration().repository == nil, !pickRepository() {
-                message.stringValue = "Saved for later. Choose a repository to start an agent."; return
+                message.stringValue = "Saved for later. Choose a repository to prepare the Codex chat."; return
             }
-            _ = try dispatcher.dispatch(id)
-            message.stringValue = "Agent launch started. Its progress and outcome will appear below."
-        } catch {message.stringValue = "Request saved; no new agent started: \(error.localizedDescription)"}
+            _ = try dispatcher.openRequest(id)
+            message.stringValue = "Opened Codex. Check the project and model, then press Send there to start."
+        } catch {message.stringValue = "Request saved; handoff could not open: \(error.localizedDescription)"}
         reloadHistory()
     }
     @objc private func chooseRepository() {_ = pickRepository(); reloadHistory()}
@@ -131,14 +138,14 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         let selectedID = selected?.id
         do {
             let config = try dispatcher?.configuration()
-            agentLabel.stringValue = "Codex subscription · Default model · " + (config?.repository.map {URL(fileURLWithPath:$0).lastPathComponent} ?? "Choose repository")
-            agentLabel.toolTip = "Uses codex-ai. Repository: \(config?.repository ?? "not selected"). Agent continues in the background; implemented changes await installation."
+            agentLabel.stringValue = "Codex app · Choose model there · " + (config?.repository.map {URL(fileURLWithPath:$0).lastPathComponent} ?? "Choose repository")
+            agentLabel.toolTip = "Visible handoff. Repository: \(config?.repository ?? "not selected"). Press Send in Codex to start. Chat progress and outcome notes link back here. Implemented changes await installation."
             rows = try store.all().reversed(); table.reloadData()
             if let selectedID, let index = rows.firstIndex(where:{$0.id == selectedID}) {table.selectRowIndexes(IndexSet(integer:index),byExtendingSelection:false)}
             showDetail()
         } catch {
             rows = []; table.reloadData(); detail.string = "History could not be read: \(error.localizedDescription)\nThe stored file has been preserved."
-            copyButton.isEnabled = false; sendSelectedButton.isEnabled = false
+            copyButton.isEnabled = false; sendSelectedButton.isEnabled = false; openChatButton.isEnabled = false
         }
     }
     private var selected: Improvement? { rows.indices.contains(table.selectedRow) ? rows[table.selectedRow] : nil }
@@ -146,6 +153,11 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         var text = "\(value.status(runningBuild:Int(store.build)))\n\(value.createdAt.formatted()) · Build \(value.build)\n\n\(value.text)"
         if !value.context.isEmpty {text += "\n\nContext: \(value.context)"}
         for update in value.updates {text += "\n\n\(update.date.formatted()) — \(update.state.title)\n\(update.note)"}
+        for handoff in value.handoffs ?? [] {
+            text += "\n\nCodex handoff · \(handoff.phase)\nRepository: \(handoff.repository)"
+            if let threadID = handoff.threadID {text += "\nChat: \(ImprovementHandoffLink.chatURL(threadID).absoluteString)"}
+            else if handoff.phase == "opened" {text += "\nPress Send in the prepared Codex chat to begin. The chat links back when the agent starts."}
+        }
         for run in value.runs ?? [] {
             text += "\n\nAgent run \(run.id.uuidString) · \(run.phase)\nRepository: \(run.repository)"
             if let session = run.sessionID {text += "\nCodex session: \(session)"}
@@ -155,8 +167,9 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
     }
     private func showDetail() {
         copyButton.isEnabled = selected != nil
+        openChatButton.isEnabled = dispatcher != nil && selected?.handoffs?.contains(where:{$0.threadID != nil}) == true
         sendSelectedButton.isEnabled = dispatcher != nil && selected.map {value in
-            ![.implemented,.declined].contains(value.state) && !(value.runs?.last?.active ?? false)
+            ![.implemented,.declined].contains(value.state) && !(value.runs?.last?.active ?? false) && !(value.handoffs?.contains(where:{$0.threadID != nil}) ?? false)
         } == true
         detail.string = selected.map(description) ?? (rows.isEmpty ? "No requests yet." : "Select a request to see its context and outcome.")
     }

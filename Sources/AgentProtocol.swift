@@ -6,6 +6,8 @@ enum AgentCommand: String, Codable, CaseIterable {
   case improvements
   case improvementAgent = "improvement-agent"
   case improvementDispatch = "improvement-dispatch"
+  case improvementOpen = "improvement-open"
+  case improvementLink = "improvement-link"
   case improvementSubmit = "improvement-submit"
   case improvementUpdate = "improvement-update"
   case appOpen = "app-open"
@@ -43,6 +45,7 @@ struct AgentRequest: Codable, Equatable {
   var improvementID: UUID?, text: String?, context: String?, state: String?, note: String?
   var revision: Int?, targetBuild: Int?, offset: Int?
   var repository: String?
+  var handoffID: UUID?, threadID: UUID?
   func validate() throws {
     guard version == 1 else { throw AgentFailure("unsupported_version", "Use protocol version 1.") }
     if command.modifies || command == .windows {
@@ -83,6 +86,8 @@ struct AgentRequest: Codable, Equatable {
     if names != nil { supplied.insert("names") }
     if catalog != nil { supplied.insert("catalog") }
     if confirm != nil { supplied.insert("confirm") }
+    if handoffID != nil { supplied.insert("handoffID") }
+    if threadID != nil { supplied.insert("threadID") }
     if repository != nil { supplied.insert("repository") }
     if improvementID != nil { supplied.insert("improvementID") }
     if text != nil { supplied.insert("text") }
@@ -99,7 +104,10 @@ struct AgentRequest: Codable, Equatable {
       if let repository, repository.isEmpty || repository.utf8.count > 4096 || !repository.hasPrefix("/") {
         throw AgentFailure("invalid_repository", "Supply an absolute repository path.")
       }
-    case .improvementDispatch:
+    case .improvementLink:
+      allowed = ["improvementID", "handoffID", "threadID"]
+      guard improvementID != nil, handoffID != nil, threadID != nil else {throw AgentFailure("invalid_handoff", "Supply improvement, handoff and current chat UUIDs.")}
+    case .improvementDispatch, .improvementOpen:
       allowed = ["improvementID"]
       guard improvementID != nil else {throw AgentFailure("invalid_improvement", "Supply an improvement ID.")}
     case .improvements:
@@ -219,7 +227,7 @@ struct AgentRequest: Codable, Equatable {
       "version", "id", "command", "name", "display", "space", "jobID", "replace", "instanceID",
       "bundleID", "action", "geometry", "axis", "newName", "windowID", "direction", "splitID",
       "ratio", "gap", "margin", "names", "catalog", "confirm",
-      "improvementID", "text", "context", "state", "note", "revision", "targetBuild", "offset", "repository",
+      "improvementID", "text", "context", "state", "note", "revision", "targetBuild", "offset", "repository", "handoffID", "threadID",
     ]
     guard let fields = object as? [String: Any], Set(fields.keys).isSubset(of: allowed) else {
       throw AgentFailure("invalid_request", "Unknown request fields.")

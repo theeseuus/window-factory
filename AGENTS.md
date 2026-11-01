@@ -1,14 +1,16 @@
 # Working on Window Factory
 
-Version: 1.2
+Version: 1.3
 Updated: 2026-11-01
 
 - Read README.md and task-relevant docs before editing; inspect Git status.
 - For improvement-request work, read docs/improvements.md and use the running
   app's CLI store API. Saved-for-later requests are not authorization to start work.
   Work on a request only when the owner sends it or explicitly asks to pick it up.
-  The dispatcher owns outcomes for its active runs; follow its prompt and return
-  the structured result rather than changing request state yourself.
+  For a desktop handoff, link the current chat using improvement-link before
+  product work, then keep progress/outcome notes updated with improvement-update.
+  If linking fails, explain the blocker in the chat and stop before code changes.
+  Historical background runs retain their separate receipt/recovery ownership.
 - Keep layout/store/coordinator, app adapters, system bridge and UI responsibilities
   separate. Reviewed creation operations belong in Resources/adapters.json.
 - Use `mise run validate`, `mise run test` and the relevant build checks. Swift

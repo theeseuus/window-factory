@@ -1,6 +1,6 @@
 # Window Factory CLI
 
-Version: 1.4
+Version: 1.5
 Updated: 2026-11-01
 
 `scripts/window-factory` (or the installed binary with `--cli`) provides JSON access to the running app's layout, application, tiling and direct window operations.
@@ -217,59 +217,57 @@ the report. Inspect it before another move; do not blindly retry a failed move
 because its first stage may already have completed.
 
 
-## Improvement requests
+## Improvement requests and visible Codex handoff
 
-These commands share the UI's durable request store and dispatcher, use normal
-Agent access, and do not require Accessibility, desktop context, an idle
-window-operation job or `--wait`. They return immediately in `result.tools`.
-Only `improvement-dispatch` launches an agent. All are advertised by `capabilities`.
+All commands use normal owner-controlled Agent access and return immediately in
+`result.tools`. They take no desktop context and do not require Accessibility or
+`--wait`. Only `improvement-open` opens another application's UI: it opens Codex's
+prepared composer (or an existing linked chat), with no model started by this app.
+The owner presses Send in Codex. The existing layout/window API remains separate.
 
 | Command | Result |
 | --- | --- |
-| `improvement-agent [--repository PATH]` | `improvementAgent`: selected repository and fixed `codex-ai` runner. Supplying an absolute path validates and saves the app-owned repository binding. |
-| `improvement-dispatch --improvement UUID` | Saves a run for that existing request and starts a background agent in its configured repository; returns the updated `improvement`. |
-| `improvements [--offset N]` | `improvements`: up to 100 summaries, oldest first; `improvementCount`: total. Continue with offsets 100, 200, etc. Each summary includes ID, excerpt, state, revision and running-build status. |
-| `improvements --improvement UUID` | `improvement`: full original text, context, source version/build, creation date and append-only updates |
-| `improvement-submit --text TEXT [--context TEXT]` | Saves a queued request; its stable ID is the invocation's `--request-id` (generated if omitted) |
-| `improvement-update --improvement UUID --revision N --state STATE --note TEXT [--target-build N]` | Appends an outcome to the named request using optimistic revision checking |
+| `improvement-agent [--repository PATH]` | `improvementAgent`: selected repository and `codex-desktop` route. An absolute Window Factory checkout path validates and saves the binding. |
+| `improvement-open --improvement UUID` | `improvement`: prepares a durable handoff, opens the documented Codex new-chat URL with path/prompt, and awaits owner Send. If already linked, opens that chat. |
+| `improvement-link --improvement UUID --handoff UUID --thread UUID` | Agent callback linking its current chat to the prepared request; returns the updated request and records working state. |
+| `improvements [--offset N]` | Up to 100 summaries, oldest first, plus total `improvementCount`; page with offsets 100, 200, etc. |
+| `improvements --improvement UUID` | Full original text/context, source version/build, notes, optional `handoffs` and historical `runs`. |
+| `improvement-submit --text TEXT [--context TEXT]` | Saves only; no model or UI. Stable request ID comes from `--request-id`, generated if omitted. |
+| `improvement-update --improvement UUID --revision N --state STATE --note TEXT [--target-build N]` | Appends a revision-checked progress/outcome note. |
 
-States: `queued`, `working`, `needs-input`, `implemented`, `declined`.
-`implemented` requires a positive `--target-build`; other states omit it.
-Text and outcome notes must be nonblank and at most 8,000 UTF-8 bytes; context is
-at most 1,000 bytes. Context is caller-supplied for CLI submissions; the app adds
-its own version/build. Outcomes should include validation and relevant commit.
-No automatic desktop inspection or screenshot capture occurs.
+The old `improvement-dispatch` command is recognized for compatibility but returns
+`background_dispatch_disabled`, directing clients to the visible handoff. It is
+not advertised as a supported capability. No current API/UI path launches a new
+headless worker or falls back to the subscription CLI.
 
-Submit retries with the same request ID return the existing record only when text,
-context and source agree, including across restarts. Outcome retries reuse the
-same operation `--request-id`, revision, state, note and target build. A different
-payload returns `request_conflict`; a fresh update using an outdated revision
-returns `revision_conflict`. Unknown IDs return `improvement_not_found`.
-Invalid content returns `invalid_improvement`; unexpected fields are rejected.
-An unsupported schema returns `improvements_unreadable`; malformed or inaccessible
-storage returns `operation_failed`. Failed reads never reset or overwrite history.
+States remain `queued`, `working`, `needs-input`, `implemented`, `declined`.
+`queued` is displayed as Saved for later, or Ready in Codex — press Send when a
+prepared handoff awaits its chat callback. Linked working status is explicitly a
+report from Codex, not a live activity feed. `implemented` requires a positive
+`--target-build`; other states omit it. Availability depends on the running build.
 
-Availability is derived from the running app build and the latest implemented
-update's target build. A local commit alone does not establish availability.
-See [the pilot workflow](docs/improvements.md) for handling requests and evaluating
-whether the pattern should become a reusable standard.
+Text and note bounds are 8,000 UTF-8 bytes, nonblank; context is at most 1,000 bytes.
+Submit retries with the same request ID return the record only if text, context
+and source agree. A handoff retains its token when reopened before linking; an
+identical improvement-link is idempotent. A different chat cannot replace a link,
+and a chat already linked to another request cannot claim this one. Callbacks use
+real UUIDs; URLs are constructed by the app rather than accepting arbitrary links.
 
+Each handoff includes ID, creation time, repository, phase (`opened`, `linked`,
+`failed`) and optional `threadID`. Existing request files without handoffs/runs
+remain readable. The original request is preserved. No installed-data rewrite is
+needed, and agents must use the API instead of writing the file themselves.
 
-Dispatch is explicit; submission alone remains saved for later. Its run ID is the
-invocation's request ID. Reusing the same `--request-id` for the same request
-returns the recorded run outcome without relaunching, including after failure;
-an intentional retry uses a fresh request ID. Reuse for another request is rejected.
- Each full request
-may now include `runs`, an optional backwards-compatible array recording ID,
-repository, start/finish times, source revision, phase and session ID. Existing
-records without `runs` remain readable. `queued` is displayed as Saved for later;
-active runs distinguish Starting agent from Agent running. Phase/result receipts
-are reconciled on queries and by the running app. No command waits for model work.
+Agent callbacks require the running app and Agent access. The prepared prompt
+instructs the agent to obtain only the non-secret `CODEX_THREAD_ID` executor value,
+link first, and stop before code changes if linking fails. It then follows normal
+repository policy, keeps notes in the app with revision-checked improvement-update,
+and discusses work in the native desktop chat. Installation/publication are separate.
 
-Dispatch errors include `repository_required`, `invalid_repository`,
-`repository_dirty`, `repository_check_failed`, `unsupported_runner`, `agent_busy`,
-`request_finished` and `agent_launch_failed`. A failed dispatch never discards a
-saved request. No automatic retry occurs. The worker uses the selected repository,
-existing subscription wrapper, configured default model and normal policy; it
-returns its result through private files even if the UI app exits. See the pilot
-workflow for execution, timeout, failure and installation boundaries.
+Errors include `repository_required`, `invalid_repository`, `codex_open_failed`,
+`chat_not_linked`, `handoff_not_found`, `handoff_conflict`, `invalid_handoff`,
+`request_conflict`, `request_finished`, `revision_conflict` and the disabled background
+route. Unknown improvement IDs return `improvement_not_found`; invalid content
+returns `invalid_improvement`. Corrupt/unsupported catalog data is never reset or
+overwritten; reads/writes fail explicitly. See [the pilot workflow](docs/improvements.md)
+for recovery, progress semantics and the verified desktop-integration boundary.

@@ -29,10 +29,15 @@ struct Improvement: Codable, Equatable, Identifiable {
     let source: String
     var updates: [ImprovementUpdate] = []
     var runs: [ImprovementRun]? = nil
+    var handoffs: [ImprovementHandoff]? = nil
     var state: ImprovementState { updates.last?.state ?? .queued }
     var revision: Int { updates.count }
     func status(runningBuild: Int?) -> String {
         if let run = runs?.last, run.active {return run.phase == "launching" ? "Starting agent…" : "Agent running"}
+        if let handoff = handoffs?.last {
+            if handoff.phase == "opened", handoff.threadID == nil, ![.implemented,.declined].contains(state) {return "Ready in Codex — press Send"}
+            if handoff.threadID != nil, state == .working {return "In progress · reported by Codex"}
+        }
         guard state == .implemented else { return state.title }
         if let target = updates.last?.targetBuild, let runningBuild, runningBuild >= target {
             return "Available in this build"
@@ -130,14 +135,51 @@ final class ImprovementStore {
         catalog.requests[index].updates.append(ImprovementUpdate(id:operationID, date:Date(), state:state, note:note, targetBuild:targetBuild))
         try save(catalog); return catalog.requests[index]
     }
-    func beginRun(_ id: UUID, run: ImprovementRun) throws -> Improvement {
+    func prepareHandoff(_ id: UUID, handoffID: UUID, repository: String) throws -> ImprovementHandoff {
         var catalog = try load()
         guard let index = catalog.requests.firstIndex(where:{$0.id == id}) else {throw AgentFailure("improvement_not_found", "No improvement has that ID.")}
-        guard !catalog.requests.contains(where:{$0.runs?.contains(where:{$0.active}) == true}) else {
-            throw AgentFailure("agent_busy", "An improvement agent is already active. Wait for its result before sending another request.")
+        if let owner = catalog.requests.first(where:{$0.handoffs?.contains(where:{$0.id == handoffID}) == true}) {
+            guard owner.id == id else {throw AgentFailure("request_conflict", "This handoff ID belongs to another request.")}
+            return owner.handoffs!.first(where:{$0.id == handoffID})!
         }
-        catalog.requests[index].runs = (catalog.requests[index].runs ?? []) + [run]
-        catalog.requests[index].updates.append(ImprovementUpdate(id:UUID(),date:Date(),state:.working,note:"Launching Codex subscription agent in the selected repository.",targetBuild:nil))
+        guard ![.implemented,.declined].contains(catalog.requests[index].state) else {
+            throw AgentFailure("request_finished", "This request already has an outcome. Open its chat or save a new request.")
+        }
+        if let existing = catalog.requests[index].handoffs?.last, existing.phase == "opened", existing.threadID == nil {
+            guard existing.repository == repository else {throw AgentFailure("handoff_conflict", "The prepared request belongs to another repository. Resolve that handoff before changing its destination.")}
+            return existing
+        }
+        let handoff = ImprovementHandoff(id:handoffID,createdAt:Date(),repository:repository)
+        catalog.requests[index].handoffs = (catalog.requests[index].handoffs ?? []) + [handoff]
+        try save(catalog); return handoff
+    }
+    func failHandoff(_ id: UUID, handoffID: UUID) throws {
+        var catalog = try load()
+        guard let index = catalog.requests.firstIndex(where:{$0.id == id}),
+              let link = catalog.requests[index].handoffs?.firstIndex(where:{$0.id == handoffID}) else {return}
+        catalog.requests[index].handoffs![link].phase = "failed"
+        catalog.requests[index].updates.append(ImprovementUpdate(id:UUID(),date:Date(),state:.needsInput,note:"Codex could not be opened. The request is saved; no model was started.",targetBuild:nil))
+        try save(catalog)
+    }
+    @discardableResult
+    func linkChat(_ id: UUID, handoffID: UUID, threadID: UUID) throws -> Improvement {
+        var catalog = try load()
+        guard let index = catalog.requests.firstIndex(where:{$0.id == id}) else {throw AgentFailure("improvement_not_found", "No improvement has that ID.")}
+        guard let link = catalog.requests[index].handoffs?.firstIndex(where:{$0.id == handoffID}) else {throw AgentFailure("handoff_not_found", "No prepared handoff has that ID.")}
+        if let existing = catalog.requests[index].handoffs![link].threadID {
+            guard existing == threadID else {throw AgentFailure("request_conflict", "Another chat is already linked to this handoff. Stop here and use that chat.")}
+            return catalog.requests[index]
+        }
+        guard catalog.requests[index].handoffs![link].phase == "opened",
+              ![.implemented,.declined].contains(catalog.requests[index].state) else {
+            throw AgentFailure("request_finished", "This handoff is no longer awaiting a chat. Do not start another implementation.")
+        }
+        guard !catalog.requests.contains(where:{$0.id != id && $0.handoffs?.contains(where:{$0.threadID == threadID}) == true}) else {
+            throw AgentFailure("request_conflict", "This chat already belongs to another improvement request.")
+        }
+        catalog.requests[index].handoffs![link].threadID = threadID
+        catalog.requests[index].handoffs![link].phase = "linked"
+        catalog.requests[index].updates.append(ImprovementUpdate(id:UUID(),date:Date(),state:.working,note:"Codex chat linked. Work was started there by the owner. Open chat to follow or discuss the work.",targetBuild:nil))
         try save(catalog); return catalog.requests[index]
     }
     func markRunStarted(_ requestID: UUID, runID: UUID, sessionID: String?) throws {

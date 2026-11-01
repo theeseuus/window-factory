@@ -120,6 +120,7 @@ import Darwin
         check(!(await service.handle(unknownFields)).ok,"unknown wire fields rejected")
         try await ImprovementTests.run(service:service,root:root)
         try await ImprovementDispatchTests.run(service:service,root:root)
+        try await ImprovementHandoffTests.run(service:service,root:root)
         var toolDispatches=0
         service.stashedWindowIDs={ [71] }
         check(await call(AgentRequest(command:.status)).result?.status?.lastSpaceMove == nil,"status has no move diagnostic until an attempt exists")

@@ -10,11 +10,7 @@ struct ImprovementRun: Codable, Equatable {
 struct ImprovementAgentConfiguration: Codable {
     var repository: String?
     let runner: String
-    init(repository: String? = nil) {self.repository = repository; runner = "codex-ai"}
-}
-struct ImprovementWorkerSpecification: Codable {
-    let runID: UUID, requestID: UUID, repository: String, baselineCommit: String
-    let text: String, context: String, sourceBuild: String
+    init(repository: String? = nil) {self.repository = repository; runner = "codex-desktop"}
 }
 struct ImprovementAgentResult: Codable {
     let state: ImprovementState, note: String, targetBuild: Int?
@@ -44,17 +40,10 @@ enum ImprovementFiles {
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(type,from:Data(contentsOf:url))
     }
-    static func privateFile(_ url: URL) throws -> FileHandle {
-        guard FileManager.default.createFile(atPath:url.path,contents:nil,attributes:[.posixPermissions:0o600]) else {
-            throw AgentFailure("agent_storage_failed", "Could not create private agent output.")
-        }
-        return try FileHandle(forWritingTo:url)
-    }
 }
 
-// Fixed commands only; all user content travels as data, never shell source.
+// Validate the owner-selected source checkout before constructing a desktop handoff.
 enum ImprovementRepository {
-    static let fish = "/opt/homebrew/bin/fish"
     static func validate(_ path: String) throws -> URL {
         let url = URL(fileURLWithPath:path).standardizedFileURL.resolvingSymlinksInPath()
         for relative in [".git","AGENTS.md","Sources/Main.swift","docs/improvements.md"] {
@@ -64,24 +53,6 @@ enum ImprovementRepository {
         }
         return url
     }
-    static func git(_ args: [String], at repository: URL, environment: [String:String]? = nil) throws -> String {
-        let process = Process(), output = Pipe()
-        process.executableURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/machine-agent-git")
-        process.arguments = args
-        if let environment {process.environment = environment}
-        process.currentDirectoryURL = repository; process.standardOutput = output; process.standardError = FileHandle.nullDevice
-        try process.run()
-        let data = output.fileHandleForReading.readDataToEndOfFile(); process.waitUntilExit()
-        guard process.terminationStatus == 0 else {throw AgentFailure("repository_check_failed", "Machine Agent Git could not verify the selected repository.")}
-        return String(decoding:data,as:UTF8.self).trimmingCharacters(in:.whitespacesAndNewlines)
-    }
-    static func preflight(_ path: String) throws -> (URL,String) {
-        let repository = try validate(path)
-        guard try git(["status","--porcelain"],at:repository).isEmpty else {
-            throw AgentFailure("repository_dirty", "The repository has uncommitted work. Finish that work before starting an improvement agent; your request remains saved.")
-        }
-        return (repository,try git(["rev-parse","HEAD"],at:repository))
-    }
 }
 
 @MainActor
@@ -90,22 +61,11 @@ final class ImprovementDispatcher {
     let directory: URL
     var changed: (() -> Void)?
     private var timer: Timer?
-    // Injectable launch/probe seams keep tests independent of models and live repositories.
-    var preflight: (String) throws -> (URL,String) = ImprovementRepository.preflight
-    var launch: (URL) throws -> Void = { directory in
-        let process = Process()
-        process.executableURL = Bundle.main.executableURL
-        process.arguments = ["--improvement-worker",directory.path]
-        process.currentDirectoryURL = directory
-        process.standardInput = FileHandle.nullDevice
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try process.run()
-    }
+    // Only old build-58 receipts need process-liveness reconciliation.
     var alive: (Int32) -> Bool = {kill($0,0) == 0 || errno == EPERM}
     init(store: ImprovementStore, watch: Bool = true) {
         self.store = store; directory = store.url.deletingLastPathComponent().appendingPathComponent("improvement-runs")
-        if watch {
+        if watch, (try? store.all().contains(where:{$0.runs?.contains(where:{$0.active}) == true})) == true {
             timer = Timer.scheduledTimer(withTimeInterval:2,repeats:true) { [weak self] _ in
                 MainActor.assumeIsolated {try? self?.reconcile()}
             }
@@ -115,44 +75,13 @@ final class ImprovementDispatcher {
     func configuration() throws -> ImprovementAgentConfiguration {
         guard FileManager.default.fileExists(atPath:configurationURL.path) else {return ImprovementAgentConfiguration()}
         let value = try ImprovementFiles.read(ImprovementAgentConfiguration.self,from:configurationURL)
-        guard value.runner == "codex-ai" else {throw AgentFailure("unsupported_runner", "This build supports the explicitly selected codex-ai subscription runner only.")}
+        guard ["codex-ai","codex-desktop"].contains(value.runner) else {throw AgentFailure("unsupported_runner", "Select the Codex desktop handoff for this build.")}
         return value
     }
     func configure(repository: String) throws -> ImprovementAgentConfiguration {
         let url = try ImprovementRepository.validate(repository)
         let value = ImprovementAgentConfiguration(repository:url.path)
         try ImprovementFiles.write(value,to:configurationURL); changed?(); return value
-    }
-    @discardableResult
-    func dispatch(_ id: UUID, operationID: UUID = UUID()) throws -> Improvement {
-        try reconcile()
-        let original = try store.get(id)
-        if let previous = try store.all().first(where:{$0.runs?.contains(where:{$0.id == operationID}) == true}) {
-            guard previous.id == id else {throw AgentFailure("request_conflict", "This dispatch ID already belongs to another request.")}
-            return original
-        }
-        guard let path = try configuration().repository else {
-            throw AgentFailure("repository_required", "Choose the Window Factory repository before sending to an agent.")
-        }
-        guard ![.implemented,.declined].contains(original.state) else {
-            throw AgentFailure("request_finished", "This request already has an outcome. Save a new request for further changes.")
-        }
-        guard !(try store.all()).contains(where:{$0.runs?.contains(where:{$0.active}) == true}) else {
-            throw AgentFailure("agent_busy", "An improvement agent is already active. Your request remains saved.")
-        }
-        let (repository,commit) = try preflight(path)
-        let run = ImprovementRun(id:operationID,startedAt:Date(),repository:repository.path,revision:original.revision)
-        let runDirectory = directory.appendingPathComponent(run.id.uuidString)
-        let specification = ImprovementWorkerSpecification(runID:run.id,requestID:id,repository:repository.path,baselineCommit:commit,text:original.text,context:original.context,sourceBuild:original.build)
-        try ImprovementFiles.write(specification,to:runDirectory.appendingPathComponent("input.json"))
-        _ = try store.beginRun(id,run:run)
-        do {try launch(runDirectory)} catch {
-            let receipt = ImprovementWorkerReceipt.failure("Agent could not start. The request is saved; resolve the launch problem and send it again. \(error.localizedDescription)")
-            try ImprovementFiles.write(receipt,to:runDirectory.appendingPathComponent("receipt.json"))
-            try store.finishRun(id,runID:run.id,receipt:receipt)
-            throw AgentFailure("agent_launch_failed", receipt.result.note)
-        }
-        changed?(); return try store.get(id)
     }
     func reconcile(now: Date = Date()) throws {
         for request in try store.all() {
@@ -172,7 +101,7 @@ final class ImprovementDispatcher {
                     if FileManager.default.fileExists(atPath:startedURL.path) {
                         let started = try ImprovementFiles.read(ImprovementWorkerStarted.self,from:startedURL)
                         if alive(started.workerPID) {
-                            try store.markRunStarted(request.id,runID:run.id,sessionID:ImprovementWorker.sessionID(root.appendingPathComponent("events.jsonl")))
+                            try store.markRunStarted(request.id,runID:run.id,sessionID:ImprovementRunLog.sessionID(root.appendingPathComponent("events.jsonl")))
                             continue
                         }
                     } else if now.timeIntervalSince(run.startedAt) < 30 {continue}
@@ -184,13 +113,46 @@ final class ImprovementDispatcher {
             }
         }
     }
+    var openURL: (URL) -> Bool = {NSWorkspace.shared.open($0)}
+    @discardableResult
+    func openRequest(_ id: UUID, operationID: UUID = UUID()) throws -> Improvement {
+        try reconcile()
+        let original = try store.get(id)
+        if let chat = original.handoffs?.last(where:{$0.threadID != nil}), let threadID = chat.threadID {
+            guard openURL(ImprovementHandoffLink.chatURL(threadID)) else {throw AgentFailure("codex_open_failed", "Could not open the linked Codex chat. The request is preserved.")}
+            return original
+        }
+        guard let path = try configuration().repository else {throw AgentFailure("repository_required", "Choose the Window Factory repository before opening Codex.")}
+        let repo = try ImprovementRepository.validate(path)
+        guard !(try store.all()).contains(where:{$0.runs?.contains(where:{$0.active}) == true}) else {
+            throw AgentFailure("agent_busy", "A previous background run is still active. Finish it before opening a new request.")
+        }
+        let handoff = try store.prepareHandoff(id,handoffID:operationID,repository:repo.path)
+        let url = try ImprovementHandoffLink.newChatURL(request:original,handoff:handoff)
+        guard openURL(url) else {
+            try store.failHandoff(id,handoffID:handoff.id)
+            throw AgentFailure("codex_open_failed", "Could not open Codex. Your request is saved; no model was started.")
+        }
+        changed?(); return try store.get(id)
+    }
+    func openChat(_ id: UUID) throws {
+        let value = try store.get(id)
+        guard let threadID = value.handoffs?.last(where:{$0.threadID != nil})?.threadID else {
+            throw AgentFailure("chat_not_linked", "No chat has linked back yet. Press Send in the prepared Codex chat first.")
+        }
+        guard openURL(ImprovementHandoffLink.chatURL(threadID)) else {throw AgentFailure("codex_open_failed", "Codex could not open the linked chat.")}
+    }
     func handle(_ request: AgentRequest) throws -> AgentToolResult {
         switch request.command {
         case .improvementAgent:
             let config = try request.repository.map {try configure(repository:$0)} ?? configuration()
             return AgentToolResult(improvementAgent:config)
         case .improvementDispatch:
-            return AgentToolResult(improvement:try dispatch(request.improvementID!,operationID:request.id))
+            throw AgentFailure("background_dispatch_disabled", "Use improvement-open for a visible Codex handoff, then press Send in Codex. Background dispatch is no longer offered.")
+        case .improvementOpen:
+            return AgentToolResult(improvement:try openRequest(request.improvementID!,operationID:request.id))
+        case .improvementLink:
+            return AgentToolResult(improvement:try store.linkChat(request.improvementID!,handoffID:request.handoffID!,threadID:request.threadID!))
         default:
             try reconcile(); return try store.handle(request)
         }

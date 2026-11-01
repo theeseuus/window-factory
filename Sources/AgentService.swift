@@ -56,7 +56,7 @@ final class AgentService {
             var payload=AgentPayload()
             switch decoded.command {
             case .status: payload.status=status()
-            case .capabilities: payload.commands=AgentCommand.allCases.map(\.rawValue);payload.status=status()
+            case .capabilities: payload.commands=AgentCommand.allCases.filter{$0 != .improvementDispatch}.map(\.rawValue);payload.status=status()
             case .layouts: payload.layouts=library.store.catalog.recipes.values.sorted{$0.name.localizedStandardCompare($1.name) == .orderedAscending}
             case .windows:
                 guard backend.accessibility() else {throw AgentFailure("accessibility_required","Window Factory needs Accessibility access for live windows.")}
@@ -69,7 +69,7 @@ final class AgentService {
             case .apps,.tilingStatus,.layoutExport:
                 payload.tools=try await backend.toolQuery(decoded)
                 guard enabled else{throw AgentFailure("agent_disabled","Agent access was disabled.")}
-            case .improvements, .improvementSubmit, .improvementUpdate, .improvementAgent, .improvementDispatch:
+            case .improvements, .improvementSubmit, .improvementUpdate, .improvementAgent, .improvementDispatch, .improvementOpen, .improvementLink:
                 guard let improvementOperation else {throw AgentFailure("unavailable", "Improvement store unavailable.")}
                 payload.tools = try improvementOperation(decoded)
             case .job:

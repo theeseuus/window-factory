@@ -312,8 +312,8 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
 enum FactoryMain {
     @MainActor static func main() {
         if CommandLine.arguments.dropFirst().first == "--improvement-worker" {
-            guard CommandLine.arguments.count == 3 else {exit(2)}
-            exit(ImprovementWorker.run(CommandLine.arguments[2]))
+            fputs("Background improvement workers are retired. Open the request in Codex instead.\n",stderr)
+            exit(2)
         }
         if CommandLine.arguments.dropFirst().first == "--cli" { AgentCLI.run(Array(CommandLine.arguments.dropFirst(2))) }
         if let index = CommandLine.arguments.firstIndex(of:"--validate-catalog") {

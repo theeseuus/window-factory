@@ -1,5 +1,28 @@
 # Source baseline
 
+## 2026-11-01 — visible Codex handoff and linked outcomes, build 59
+
+Adds Open in Codex and Open selected in Codex: requests open the documented
+workspace/composer link, and the owner presses Send in Codex to begin. This
+replaces the background runner as the normal route. The prepared prompt links
+the current chat back through improvement-link before product work, then records
+progress/outcomes through the existing update API. Open chat returns to that
+conversation, including after completion.
+
+Opening a composer is labelled Ready in Codex — press Send; it does not claim
+work has started. Chat links and original wording survive app restarts. Failed
+opens preserve requests, duplicate/conflicting links are guarded, and old run
+history/receipts remain readable. The old dispatch command fails explicitly.
+Space-move implementation is unchanged. See the pilot guide for the bounded
+desktop integration evidence and the owner-selected extra Send step.
+
+Source validation, the full native suite (including 34 visible-handoff and seven
+historical-recovery assertions), and the signed build passed. Fixtures cover URL
+encoding, draft/save behavior, linking, duplicate/conflicting callbacks, persistence
+and outcome notes. Synthetic desktop project chats were created/completed/opened
+without product work. These checks do not establish acceptance of a real feature
+implementation or resolution of the intermittent Space-focus report.
+
 ## 2026-11-01 — explicit save or immediate agent dispatch, build 58
 
 Replaces the ambiguous Send request action with Save for later and Send to agent
