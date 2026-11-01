@@ -68,7 +68,7 @@ xcrun --sdk macosx swiftc -swift-version 6 -parse-as-library -warnings-as-errors
 xcrun --sdk macosx swiftc -swift-version 6 -parse-as-library -warnings-as-errors \
     -module-cache-path "$native_root/.build/ModuleCache" \
     -import-objc-header "$native_root/Sources/Bridge.h" \
-    "$@" "$native_root/Tests/AgentTests.swift" "$native_root/.build/panel-test-bridge.o" \
+    "$@" "$native_root/Tests/AgentTests.swift" "$native_root/Tests/ImprovementTests.swift" "$native_root/.build/panel-test-bridge.o" \
     -framework Cocoa -framework ApplicationServices -framework Carbon -framework ScreenCaptureKit \
     -o "$native_root/.build/agent-tests"
 "$native_root/.build/agent-tests" "$native_root/Resources/adapters.json"

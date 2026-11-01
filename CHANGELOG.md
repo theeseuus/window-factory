@@ -1,5 +1,26 @@
 # Source baseline
 
+## 2026-11-01 — improvement-request pilot, build 57
+
+Adds Improve this app in the application and menu-bar menus, with a quick request
+form, reviewable view context and local history. Original wording and append-only
+outcomes persist beside the layout catalog. A copy action supports an immediate
+development-chat handoff; no background worker is configured. Shared CLI commands
+list, read, submit and update requests with durable retry handling and revision
+checks. Implemented requests await their target build until that build is running.
+
+The pilot omits screenshots and automatic diagnostics. Existing permission and
+Agent access ownership remain; request records do not need Accessibility or a
+desktop mutation job. See [the pilot workflow](docs/improvements.md).
+
+Source validation, the full native fixture suite (including 37 improvement-request
+assertions), and the signed build passed. Build 57 was installed through the
+verified installer; layout/previous-layout bytes and preferences were unchanged,
+Accessibility and Agent access remained enabled, and the running app advertised
+the three new commands and returned an empty request history. Two distinct
+installer backups were retained. Real request usefulness and interaction remain
+for owner use; fixture checks do not establish those outcomes.
+
 ## 2026-10-31 — quiet login/session startup, build 56
 
 Login/service launch markers are recognised by their documented presence and

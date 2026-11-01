@@ -5,6 +5,11 @@ enum AgentCLI {
     static let help = """
     Window Factory CLI (JSON; running app and Agent access required)
       window-factory status | capabilities | layouts | apps | tiling-status | layout-export
+      window-factory improvements [--improvement UUID | --offset N]
+      window-factory improvement-submit --text TEXT [--context TEXT] [--request-id UUID]
+      window-factory improvement-update --improvement UUID --revision N --state STATE --note TEXT [--target-build N]
+        States: queued, working, needs-input, implemented (requires target build), declined
+        Improvement records are immediate local operations; no desktop context or --wait.
       window-factory windows --display ID --space ID
       window-factory capture --name NAME --display ID --space ID [--replace] [--wait]
       window-factory restore|establish --name NAME --display ID --space ID [--wait]
@@ -39,6 +44,14 @@ enum AgentCLI {
             guard index<args.count else {throw AgentFailure("invalid_arguments","Missing value for \(flag).")}
             let value=args[index];index+=1
             switch flag {
+            case "--text":request.text=value
+            case "--context":request.context=value
+            case "--state":request.state=value
+            case "--note":request.note=value
+            case "--improvement":guard let id=UUID(uuidString:value) else{throw AgentFailure("invalid_arguments","Invalid improvement ID.")};request.improvementID=id
+            case "--revision":guard let n=Int(value),n>=0 else{throw AgentFailure("invalid_arguments","Invalid revision.")};request.revision=n
+            case "--offset":guard let n=Int(value),n>=0 else{throw AgentFailure("invalid_arguments","Invalid offset.")};request.offset=n
+            case "--target-build":guard let n=Int(value),n>0 else{throw AgentFailure("invalid_arguments","Invalid build.")};request.targetBuild=n
             case "--bundle-id":request.bundleID=value
             case "--action":request.action=value
             case "--geometry":request.geometry=value

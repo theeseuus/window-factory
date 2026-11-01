@@ -118,6 +118,7 @@ import Darwin
         check(parsed.request.command == .capture && parsed.waitSeconds==60,"CLI accepts documented invocation")
         let unknownFields=Data("{\"version\":1,\"id\":\"\(UUID().uuidString)\",\"command\":\"status\",\"replace\":false,\"enable\":true}".utf8)
         check(!(await service.handle(unknownFields)).ok,"unknown wire fields rejected")
+        try await ImprovementTests.run(service:service,root:root)
         var toolDispatches=0
         service.stashedWindowIDs={ [71] }
         check(await call(AgentRequest(command:.status)).result?.status?.lastSpaceMove == nil,"status has no move diagnostic until an attempt exists")

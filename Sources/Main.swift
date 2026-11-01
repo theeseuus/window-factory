@@ -2,6 +2,7 @@ import AppKit
 
 @MainActor
 final class FactoryApp: NSObject, NSApplicationDelegate {
+    var improvements: ImprovementsWindow?
     var systemCommands: SystemCommands?
     var tilingShortcut: OptionalCommandShortcut?
     var newWindowShortcut: OptionalCommandShortcut?
@@ -54,6 +55,10 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
                 store.catalog.recipes["Two-window preview"] = Recipe(name:"Two-window preview",capturedAt:"preview",windows:Array(slots.prefix(2)))
                 store.catalog.recipes["Single-window preview"] = Recipe(name:"Single-window preview",capturedAt:"preview",windows:Array(slots.prefix(1)))
             }
+            let improvementStore = ImprovementStore(url:URL(fileURLWithPath:directory).appendingPathComponent("improvements.json"),
+                version:Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development",
+                build:Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development")
+            improvements = ImprovementsWindow(store:improvementStore)
             let preferences = FactoryPreferences()
             let bindings = preview ? nil : KeybindingManager(store:preferences.shortcuts)
             keybindings = bindings
@@ -108,6 +113,7 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
                 do { try system?.restorePreference() } catch { library?.status.stringValue=error.localizedDescription }
                 let indicator = SpaceIndicator(preferences:preferences); spaceIndicator = indicator
                 indicator.openLibrary = { [weak self] in self?.library?.show() }
+                indicator.openImprovements = { [weak self] in self?.showImprovements(nil) }
                 indicator.openSettings = { [weak self] in self?.showSettings(nil) }
                 indicator.openShortcuts = { [weak self] in self?.showShortcuts(nil) }
                 indicator.changed = { [weak self] in self?.settings?.refresh(); self?.shortcutReference?.refresh() }
@@ -161,6 +167,7 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
                 spaceIndicator?.newCodexChord = { [weak creationKey] in creationKey?.chord }
                 spaceIndicator?.newCodexAvailable = { [weak creator] in creator?.available("com.openai.codex") == true }
                 let service=AgentService(preferences:preferences,library:library);agent=service;settings?.agent=service
+                service.improvementOperation = { try improvementStore.handle($0) }
                 service.extraBusy = { [weak self] in self?.geometry?.isBusy == true || self?.focus?.isBusy == true || self?.stash?.isBusy == true || self?.accordion?.isBusy == true || self?.spaceMove?.isMoving == true || self?.switcher?.isOpen == true || self?.tiling?.controller.isBusy == true || self?.newWindow?.isBusy == true || self?.applications?.isLaunching == true || self?.systemCommands?.isBusy == true }
                 let tools=AgentTools(library:library,apps:appLauncher,creation:creator,tiling:feature.controller);agentTools=tools
                 let direct=AgentDirectWindows(geometry:geometry!,stash:stash!,move:spaceMove!,accordion:accordion!);agentWindows=direct
@@ -174,7 +181,9 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
             }
             let menu = NSMenu(), item = NSMenuItem(), appMenu = NSMenu()
             let settingsItem = appMenu.addItem(withTitle:"Settings…",action:#selector(showSettings(_:)),keyEquivalent:",")
-            settingsItem.target = self; appMenu.addItem(.separator())
+            settingsItem.target = self
+            let improveItem = appMenu.addItem(withTitle:"Improve this app…",action:#selector(showImprovements(_:)),keyEquivalent:"")
+            improveItem.target = self; appMenu.addItem(.separator())
             appMenu.addItem(withTitle:"Quit Window Factory",action:#selector(NSApplication.terminate(_:)),keyEquivalent:"q")
             item.submenu = appMenu; menu.addItem(item)
             let editItem = NSMenuItem(), edit = NSMenu(title:"Edit")
@@ -223,6 +232,16 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
             let alert = NSAlert(); alert.messageText = "Window Factory could not start"; alert.informativeText = error.localizedDescription
             alert.runModal(); NSApp.terminate(nil)
         }
+    }
+    @objc func showImprovements(_ sender: Any?) {
+        let key = NSApp.keyWindow
+        let context: String
+        if let key, key === settings?.window { context = "Settings" }
+        else if let key, key === library?.window { context = "Layout library" }
+        else if let key, key === shortcutReference?.window { context = "Keyboard shortcuts" }
+        else if let key, key === applicationSearch?.window { context = "Applications" }
+        else { context = "Menu bar / window controls" }
+        improvements?.show(context:context)
     }
     private func restoreShortcutOwners() {
         if geometry?.active == true { try? geometry?.enable() }

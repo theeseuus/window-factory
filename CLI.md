@@ -1,7 +1,7 @@
 # Window Factory CLI
 
-Version: 1.2
-Updated: 2026-10-31
+Version: 1.3
+Updated: 2026-11-01
 
 `scripts/window-factory` (or the installed binary with `--cli`) provides JSON access to the running app's layout, application, tiling and direct window operations.
 It does not open Window Factory’s library, confirmation panels or Settings,
@@ -41,7 +41,8 @@ limit, short transport timeouts and at most eight connected clients.
 | `cancel --job UUID` | Request cancellation of that CLI job only |
 
 The IDs are the native display/Space IDs returned by `status`, not the desktop
-ordinal printed in the menu bar. Modifying requests require both IDs. A changed
+ordinal printed in the menu bar. Desktop-modifying requests require both IDs. Improvement record operations
+are local data operations and take neither ID. A changed
 or unavailable desktop produces `context_changed` and does not start an operation.
 The existing engine continues checking its context during execution.
 
@@ -214,3 +215,39 @@ The same policy applies to keyboard and agent requests.
 There is no disk history, background polling, window title or document path in
 the report. Inspect it before another move; do not blindly retry a failed move
 because its first stage may already have completed.
+
+
+## Improvement requests
+
+These commands share the UI's durable request store, use normal Agent access,
+and do not require Accessibility, desktop context, an idle window-operation job
+or `--wait`. They return immediately in `result.tools` and never execute a request.
+All three are advertised by `capabilities`.
+
+| Command | Result |
+| --- | --- |
+| `improvements [--offset N]` | `improvements`: up to 100 summaries, oldest first; `improvementCount`: total. Continue with offsets 100, 200, etc. Each summary includes ID, excerpt, state, revision and running-build status. |
+| `improvements --improvement UUID` | `improvement`: full original text, context, source version/build, creation date and append-only updates |
+| `improvement-submit --text TEXT [--context TEXT]` | Saves a queued request; its stable ID is the invocation's `--request-id` (generated if omitted) |
+| `improvement-update --improvement UUID --revision N --state STATE --note TEXT [--target-build N]` | Appends an outcome to the named request using optimistic revision checking |
+
+States: `queued`, `working`, `needs-input`, `implemented`, `declined`.
+`implemented` requires a positive `--target-build`; other states omit it.
+Text and outcome notes must be nonblank and at most 8,000 UTF-8 bytes; context is
+at most 1,000 bytes. Context is caller-supplied for CLI submissions; the app adds
+its own version/build. Outcomes should include validation and relevant commit.
+No automatic desktop inspection or screenshot capture occurs.
+
+Submit retries with the same request ID return the existing record only when text,
+context and source agree, including across restarts. Outcome retries reuse the
+same operation `--request-id`, revision, state, note and target build. A different
+payload returns `request_conflict`; a fresh update using an outdated revision
+returns `revision_conflict`. Unknown IDs return `improvement_not_found`.
+Invalid content returns `invalid_improvement`; unexpected fields are rejected.
+An unsupported schema returns `improvements_unreadable`; malformed or inaccessible
+storage returns `operation_failed`. Failed reads never reset or overwrite history.
+
+Availability is derived from the running app build and the latest implemented
+update's target build. A local commit alone does not establish availability.
+See [the pilot workflow](docs/improvements.md) for handling requests and evaluating
+whether the pattern should become a reusable standard.

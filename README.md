@@ -1,7 +1,7 @@
 # Window Factory
 
-Version: 1.1
-Updated: 2026-10-31
+Version: 1.2
+Updated: 2026-11-01
 
 <img src="Resources/WindowFactory.icon/Assets/WindowFactory.png" width="128" alt="Window Factory sculpted blue app icon">
 
@@ -19,6 +19,7 @@ Spaces. Built with Swift, AppKit and a small Objective-C system bridge.
   windows and restore their previous positions.
 - Configure app-launch shortcuts and search applications separately from layouts.
 - Use an optional same-user JSON CLI through the running app.
+- Request improvements in the app and see their context and outcomes locally.
 
 ## Getting started
 
@@ -63,7 +64,8 @@ Settings or Keyboard Shortcuts. Shortcuts are configurable and the reference
 window/menu hints follow the saved bindings. A hold-Tab-to-Hyper mapping is an
 optional external keyboard setup, not a requirement or bundled remapper.
 
-[Usage and shortcut defaults](docs/usage.md) explains Restore versus Establish,
+[Improvement requests](docs/improvements.md) describes the local pilot and agent
+handoff. [Usage and shortcut defaults](docs/usage.md) explains Restore versus Establish,
 search/order/Space preview, direct controls and tiling. [CLI.md](CLI.md) describes
 agent commands and the Settings access toggle. [App adapters](docs/app-adapters.md)
 is the procedure for adding reviewed window-creation support.

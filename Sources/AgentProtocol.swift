@@ -3,6 +3,9 @@ import Foundation
 enum AgentCommand: String, Codable, CaseIterable {
   case status, capabilities, layouts, windows, capture, restore, establish, job, cancel
   case apps
+  case improvements
+  case improvementSubmit = "improvement-submit"
+  case improvementUpdate = "improvement-update"
   case appOpen = "app-open"
   case newWindow = "new-window"
   case tilingStatus = "tiling-status"
@@ -35,6 +38,8 @@ struct AgentRequest: Codable, Equatable {
   var windowID: UInt32?, direction: Int?, splitID: UUID?, ratio: Double?, gap: Double?,
     margin: Double?
   var names: [String]?, catalog: Catalog?, confirm: Bool?
+  var improvementID: UUID?, text: String?, context: String?, state: String?, note: String?
+  var revision: Int?, targetBuild: Int?, offset: Int?
   func validate() throws {
     guard version == 1 else { throw AgentFailure("unsupported_version", "Use protocol version 1.") }
     if command.modifies || command == .windows {
@@ -75,8 +80,30 @@ struct AgentRequest: Codable, Equatable {
     if names != nil { supplied.insert("names") }
     if catalog != nil { supplied.insert("catalog") }
     if confirm != nil { supplied.insert("confirm") }
+    if improvementID != nil { supplied.insert("improvementID") }
+    if text != nil { supplied.insert("text") }
+    if context != nil { supplied.insert("context") }
+    if state != nil { supplied.insert("state") }
+    if note != nil { supplied.insert("note") }
+    if revision != nil { supplied.insert("revision") }
+    if targetBuild != nil { supplied.insert("targetBuild") }
+    if offset != nil { supplied.insert("offset") }
     let allowed: Set<String>
     switch command {
+    case .improvements:
+      allowed = ["improvementID", "offset"]
+      guard offset.map({$0 >= 0}) ?? true, improvementID == nil || offset == nil else {
+        throw AgentFailure("invalid_request", "Use an improvement ID or a nonnegative list offset.")
+      }
+    case .improvementSubmit:
+      allowed = ["text", "context"]
+      try ImprovementStore.validateText(text ?? "", context:context ?? "")
+    case .improvementUpdate:
+      allowed = ["improvementID", "state", "note", "revision", "targetBuild"]
+      guard improvementID != nil, let revision, revision >= 0, let state = ImprovementState(rawValue:state ?? "") else {
+        throw AgentFailure("invalid_improvement", "Supply improvement ID, current revision and a supported state.")
+      }
+      try ImprovementStore.validateUpdate(state:state, note:note ?? "", targetBuild:targetBuild)
     case .appOpen, .newWindow:
       allowed = ["bundleID"]
       guard let bundleID, !bundleID.isEmpty, bundleID.utf8.count <= 255,
@@ -180,6 +207,7 @@ struct AgentRequest: Codable, Equatable {
       "version", "id", "command", "name", "display", "space", "jobID", "replace", "instanceID",
       "bundleID", "action", "geometry", "axis", "newName", "windowID", "direction", "splitID",
       "ratio", "gap", "margin", "names", "catalog", "confirm",
+      "improvementID", "text", "context", "state", "note", "revision", "targetBuild", "offset",
     ]
     guard let fields = object as? [String: Any], Set(fields.keys).isSubset(of: allowed) else {
       throw AgentFailure("invalid_request", "Unknown request fields.")
@@ -283,6 +311,7 @@ struct AgentTiling: Codable {
 }
 struct AgentToolResult: Codable {
   var apps: [AgentApp]?, tiling: AgentTiling?, catalog: Catalog?, names: [String]?
+  var improvement: Improvement?, improvements: [ImprovementSummary]?, improvementCount: Int?
   var display: UInt32?, space: UInt64?
   var windowID: UInt32?, pid: Int32?, frame: Frame?, message: String?
 }

@@ -13,6 +13,7 @@ final class SpaceIndicator: NSObject, NSMenuDelegate, NSMenuItemValidation {
     var changed: (() -> Void)?
     var systemMenu: (()->NSMenu)?
     var openLibrary: (() -> Void)?
+    var openImprovements: (() -> Void)?
     var openSettings: (() -> Void)?
     var tilingChord: (()->ShortcutChord?)?
     var newCodexChord: (()->ShortcutChord?)?
@@ -41,7 +42,7 @@ final class SpaceIndicator: NSObject, NSMenuDelegate, NSMenuItemValidation {
         let menu = NSMenu(),description = NSMenuItem(title:"Reading active Space…",action:nil,keyEquivalent:"")
         menu.delegate = target
         description.isEnabled = false; menu.addItem(description); menu.addItem(.separator())
-        for (title,selector,id) in [("Open Window Factory",#selector(showLibrary),"library.0"),("Settings…",#selector(showSettings),"settings"),("Keyboard Shortcuts…",#selector(showShortcuts),"library.1"),("Tiling…",#selector(showTiling),"tiling"),("New Codex Window",#selector(createCodexWindow),"codex.new-window")] {
+        for (title,selector,id) in [("Open Window Factory",#selector(showLibrary),"library.0"),("Settings…",#selector(showSettings),"settings"),("Improve this app…",#selector(showImprovements),"improvements"),("Keyboard Shortcuts…",#selector(showShortcuts),"library.1"),("Tiling…",#selector(showTiling),"tiling"),("New Codex Window",#selector(createCodexWindow),"codex.new-window")] {
             let entry = menu.addItem(withTitle:title,action:selector,keyEquivalent:""); entry.target = target; entry.identifier = NSUserInterfaceItemIdentifier(id)
         }
         let settings = menu.items.first{$0.identifier?.rawValue == "settings"}!
@@ -143,6 +144,7 @@ final class SpaceIndicator: NSObject, NSMenuDelegate, NSMenuItemValidation {
     @objc private func createCodexWindow() { newCodexWindow?() }
     @objc private func showTiling() { openTiling?() }
     @objc private func showLibrary() { openLibrary?() }
+    @objc private func showImprovements() { openImprovements?() }
     @objc private func showSettings() { openSettings?() }
     @objc private func showShortcuts() { openShortcuts?() }
     func stop() {
