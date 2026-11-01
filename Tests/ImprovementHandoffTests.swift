@@ -39,6 +39,7 @@ enum ImprovementHandoffTests {
         check(query["path"] == repo.resolvingSymlinksInPath().path,"workspace path survives URL encoding")
         check(query["mode"] == "codex", "handoff explicitly selects coding mode instead of inheriting ChatGPT")
         check(query["projectId"] == "fixture-project","handoff selects the bound saved project explicitly")
+        check(components.queryItems!.map(\.name) == ["mode","projectId","path","prompt"] && components.percentEncodedQuery!.contains("path=%2F"),"handoff matches the verified routing-first, strictly encoded desktop wire format")
         check(!opened[0].absoluteString.contains("+"),"literal plus signs are safe for both URLComponents and form-style query decoders")
         check(query["prompt"]!.contains("A & B + C?") && query["prompt"]!.contains("$(do not execute) 😀"),"request remains data and survives URL encoding")
         check(query["prompt"]!.contains(handoff.id.uuidString) && query["prompt"]!.contains("CODEX_THREAD_ID") && query["prompt"]!.contains("improvement-link"),"prepared prompt carries stable callback IDs and current-chat discovery")

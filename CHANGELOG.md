@@ -1,5 +1,13 @@
 # Source baseline
 
+## 2026-11-01 — verified desktop URL representation, build 67
+
+Emit routing fields before the prompt and use strict RFC 3986 component encoding,
+matching the successful full preview byte-for-byte. Preserve explicit project
+binding, existing requests and callbacks. URL fixtures verify reserved characters
+and the native integration checks the selected project separately.
+
+
 ## 2026-11-01 — bind the saved Codex project, build 66
 
 The build-65 live pilot opened a coding chat but retained the previously selected

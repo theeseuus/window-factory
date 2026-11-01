@@ -1,6 +1,6 @@
 # Improvement requests — Window Factory pilot
 
-Version: 1.6
+Version: 1.7
 Updated: 2026-11-01
 
 ## Two connected places
@@ -191,3 +191,11 @@ before creating a handoff or opening a composer. Old configuration files still
 load and existing linked-chat opening/history remain available. The same source
 request and handoff can be retried after correcting setup; never restart work in
 an already-linked chat by creating another task.
+
+Build 67 matches the successful full-preview wire format exactly: routing fields
+precede the prompt and values use strict RFC 3986 encoding. The build-66 full
+handoff retained the previous project despite a valid explicit binding; a strict,
+routing-first full URL selected Window Factory in the preview. Keep live transport
+and final chat/callback assertions separate from URL fixture success. This is a
+version-sensitive integration, not a claim that URI parameter order generally
+has semantic meaning.

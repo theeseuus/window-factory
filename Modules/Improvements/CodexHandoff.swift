@@ -88,14 +88,21 @@ public enum ImprovementHandoffLink {
     public static func newChatURL(request: Improvement, handoff: ImprovementHandoff, application: ImprovementApplication, projectID: String) throws -> URL {
         var components = URLComponents()
         components.scheme = "codex"; components.host = "threads"; components.path = "/new"
-        components.queryItems = [URLQueryItem(name:"mode",value:"codex"),URLQueryItem(name:"path",value:handoff.repository),URLQueryItem(name:"prompt",value:try prompt(request:request,handoff:handoff,application:application))]
         guard !projectID.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,
               projectID.utf8.count <= 256, !projectID.unicodeScalars.contains(where:CharacterSet.whitespacesAndNewlines.union(.controlCharacters).contains) else {
             throw ImprovementFailure("invalid_handoff", "Supply the verified saved Codex project ID.")
         }
-        components.queryItems?.append(URLQueryItem(name:"projectId",value:projectID))
-        // URLSearchParams-style decoders treat raw '+' as a space. Preserve it as data.
-        components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of:"+",with:"%2B")
+        // Match the wire format verified with the installed desktop handler:
+        // routing fields precede the potentially long prompt; encode values as RFC 3986 components.
+        let items = [("mode", "codex"), ("projectId", projectID), ("path", handoff.repository),
+                     ("prompt", try prompt(request:request,handoff:handoff,application:application))]
+        let unreserved = CharacterSet(charactersIn:"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        components.percentEncodedQuery = try items.map { name, value in
+            guard let encoded = value.addingPercentEncoding(withAllowedCharacters:unreserved) else {
+                throw ImprovementFailure("invalid_handoff", "Could not encode the Codex handoff.")
+            }
+            return "\(name)=\(encoded)"
+        }.joined(separator:"&")
         guard let url = components.url else {throw ImprovementFailure("invalid_handoff", "Could not construct a Codex handoff URL.")}
         return url
     }
