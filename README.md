@@ -1,6 +1,6 @@
 # Window Factory
 
-Version: 1.4
+Version: 1.5
 Updated: 2026-11-01
 
 <img src="Resources/WindowFactory.icon/Assets/WindowFactory.png" width="128" alt="Window Factory sculpted blue app icon">
@@ -65,8 +65,8 @@ Settings or Keyboard Shortcuts. Shortcuts are configurable and the reference
 window/menu hints follow the saved bindings. A hold-Tab-to-Hyper mapping is an
 optional external keyboard setup, not a requirement or bundled remapper.
 
-[Improvement requests](docs/improvements.md) describes the local pilot and agent
-handoff. [Usage and shortcut defaults](docs/usage.md) explains Restore versus Establish,
+[Improvement requests](docs/improvements.md) describes the shared Improvements
+module, this app’s integration and the visible agent handoff. [Usage and shortcut defaults](docs/usage.md) explains Restore versus Establish,
 search/order/Space preview, direct controls and tiling. [CLI.md](CLI.md) describes
 agent commands and the Settings access toggle. [App adapters](docs/app-adapters.md)
 is the procedure for adding reviewed window-creation support.

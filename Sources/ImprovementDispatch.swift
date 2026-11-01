@@ -1,31 +1,10 @@
 import AppKit
 import Darwin
 
-struct ImprovementRun: Codable, Equatable {
-    let id: UUID, startedAt: Date, repository: String, revision: Int
-    var phase = "launching"
-    var finishedAt: Date?, sessionID: String?
-    var active: Bool { finishedAt == nil }
-}
 struct ImprovementAgentConfiguration: Codable {
     var repository: String?
     let runner: String
     init(repository: String? = nil) {self.repository = repository; runner = "codex-desktop"}
-}
-struct ImprovementAgentResult: Codable {
-    let state: ImprovementState, note: String, targetBuild: Int?
-    func validate() throws {
-        guard [.implemented,.needsInput,.declined].contains(state) else {
-            throw AgentFailure("invalid_agent_result", "Agent must report implemented, needs-input or declined.")
-        }
-        try ImprovementStore.validateUpdate(state:state,note:note,targetBuild:targetBuild)
-    }
-}
-struct ImprovementWorkerReceipt: Codable {
-    let finishedAt: Date, succeeded: Bool, result: ImprovementAgentResult, sessionID: String?
-    static func failure(_ note: String) -> Self {
-        Self(finishedAt:Date(),succeeded:false,result:ImprovementAgentResult(state:.needsInput,note:note,targetBuild:nil),sessionID:nil)
-    }
 }
 struct ImprovementWorkerStarted: Codable {let workerPID: Int32, agentPID: Int32, date: Date}
 

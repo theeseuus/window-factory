@@ -290,7 +290,7 @@ struct AgentResponse: Codable {
   var error: AgentFailure?
   static func failure(_ error: Error, id: UUID? = nil, instance: UUID? = nil) -> Self {
     let failure =
-      error as? AgentFailure ?? AgentFailure("operation_failed", error.localizedDescription)
+      error as? AgentFailure ?? (error as? ImprovementFailure).map {AgentFailure($0.code, $0.message)} ?? AgentFailure("operation_failed", error.localizedDescription)
     return Self(requestID: id, instanceID: instance, ok: false, code: failure.code, error: failure)
   }
   func encoded() -> Data {

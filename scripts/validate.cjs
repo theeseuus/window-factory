@@ -5,3 +5,14 @@ for(const dir of ['scripts','Tests'])for(const name of fs.readdirSync(path.join(
 const registry=JSON.parse(fs.readFileSync(path.join(root,'Resources/adapters.json')));assert.equal(registry.schemaVersion,1);assert.equal(new Set(registry.adapters.map(x=>x.bundleID)).size,registry.adapters.length);
 for(const name of ['geometry','focus','accordion'])assert(Array.isArray(JSON.parse(fs.readFileSync(path.join(root,`Tests/Fixtures/legacy-${name}.json`)))));
 assert(!fs.existsSync(path.join(root,'Hammerspoon')));console.log('Standalone source/adapter/compatibility-fixture checks passed.');
+
+// A consumer build uses a pinned source snapshot, independently of sibling checkouts.
+const crypto=require('node:crypto'), moduleRoot=path.join(root,'Modules/Improvements');
+const moduleManifest=JSON.parse(fs.readFileSync(path.join(moduleRoot,'provenance.json')));
+assert.equal(moduleManifest.module,'Improvements'); assert.match(moduleManifest.revision,/^[0-9a-f]{40}$/);
+assert.deepEqual(fs.readdirSync(moduleRoot).filter(x=>x.endsWith('.swift')).sort(),Object.keys(moduleManifest.files).sort());
+for(const [name,digest] of Object.entries(moduleManifest.files)) {
+  assert.equal(path.basename(name),name);
+  assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(moduleRoot,name))).digest('hex'),digest);
+}
+console.log('Pinned Improvements module integrity verified.');

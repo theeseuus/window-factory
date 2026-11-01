@@ -1,6 +1,6 @@
 # Improvement requests — Window Factory pilot
 
-Version: 1.3
+Version: 1.4
 Updated: 2026-11-01
 
 ## Two connected places
@@ -8,7 +8,8 @@ Updated: 2026-11-01
 The application owns the original request, compact status and outcome. The Codex
 desktop project chat owns the investigation, questions, discussion and development
 history. Each request can retain a direct link to that chat. This is the current
-pilot contract; it is not yet a standard adopted across other applications.
+shared interaction contract. Window Factory is the first consumer of the extracted
+Improvements Swift module; other applications still need their own integration.
 
 Choose **Improve this app…** from the application menu or menu-bar badge. Describe
 what should work differently and edit/clear the suggested context. The app adds
@@ -140,3 +141,26 @@ prepare the workspace/composer and open existing chats; they do not submit the
 prompt. The app does not claim automatic native-chat creation. Callback, URL and
 persistence fixtures do not establish real product-fix acceptance. Verify one
 complete human handoff before expanding to Claude or local-model routes.
+
+## Shared module ownership
+
+The standalone `improvements` project owns the Swift package's request catalog,
+append-only updates, schema compatibility and configurable Codex handoff prompt.
+Window Factory compiles a pinned source snapshot in `Modules/Improvements` so it
+remains buildable without a sibling checkout or network access. `provenance.json`
+records the canonical source commit and hashes; `mise run validate` checks them.
+The standalone project's README defines the shared integration contract.
+
+Make shared changes in the Improvements project, validate and sign a local commit,
+then run its `scripts/vendor.py` against this app's `Modules/Improvements` directory.
+The updater refuses modified snapshots; do not patch generated files in place.
+The package also supports SwiftPM hosts through its public API.
+
+`Sources/Improvements.swift` adapts the local CLI protocol;
+`Sources/ImprovementHandoff.swift` supplies this app's name and callback command.
+Repository selection, AppKit presentation, Agent access, IPC and legacy process
+receipt reconciliation remain app-owned. Existing data paths, schema, UUIDs and
+CLI error codes are preserved. Claude and local-model routing are not implemented.
+
+Build 62 introduces this extraction. It does not establish live Space-move
+behaviour; unrelated diagnostic changes may be developed separately.

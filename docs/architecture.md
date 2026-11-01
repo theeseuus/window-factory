@@ -1,7 +1,7 @@
 # Architecture and evidence
 
-Version: 1.0
-Updated: 2026-10-26
+Version: 1.1
+Updated: 2026-11-01
 
 Core.swift and Store.swift own recipe validation, normalized geometry, matching
 and atomic catalog recovery. Operations and MacServices own bounded layout
@@ -38,3 +38,8 @@ selection/movement, mixed-app tiling and explicit Codex creation. These results
 are scoped to their tested system/app versions; multi-display changes, unsupported
 private APIs, broader adapters, login startup and more failure cases remain live
 verification work. No real-desktop mutations are performed by the fixture suite.
+
+Improvement storage and Codex prompt/URL construction come from the pinned
+`Modules/Improvements` snapshot. The standalone Improvements package is canonical;
+its manifest identifies the source commit. Window Factory owns the UI, CLI and
+permission adapters described in [improvements.md](improvements.md).

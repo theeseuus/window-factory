@@ -53,7 +53,7 @@ xcrun --sdk macosx clang -fobjc-arc -Wall -Wextra -Werror \
 xcrun --sdk macosx clang -fobjc-arc -Wall -Wextra -Werror \
     -c "$native_root/Sources/Bridge.m" -o "$native_root/.build/panel-test-bridge.o"
 set --
-for source in "$native_root"/Sources/*.swift; do
+for source in "$native_root"/Sources/*.swift "$native_root"/Modules/Improvements/*.swift; do
     [ "$(basename "$source")" = Main.swift ] || set -- "$@" "$source"
 done
 xcrun --sdk macosx swiftc -swift-version 6 -parse-as-library -warnings-as-errors \

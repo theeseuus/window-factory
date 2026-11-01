@@ -4,7 +4,7 @@ native_root=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 # App bundles must stay outside the File Provider-managed source checkout.
 output=${WINDOW_FACTORY_BUILD_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/window-factory/build}
 . "$native_root/signing-config.sh"
-build_number=${WINDOW_FACTORY_BUILD_NUMBER:-60}
+build_number=${WINDOW_FACTORY_BUILD_NUMBER:-62}
 case "$build_number" in ''|*[!0-9]*) echo "Build number must be numeric" >&2; exit 1;; esac
 app="$output/Window Factory.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$output/ModuleCache"
@@ -16,7 +16,7 @@ xcrun --sdk macosx clang -fobjc-arc -Wall -Wextra -Werror \
     -c "$native_root/Sources/Bridge.m" -o "$output/Bridge.o"
 xcrun --sdk macosx swiftc -swift-version 6 -parse-as-library -warnings-as-errors \
     -module-cache-path "$output/ModuleCache" -import-objc-header "$native_root/Sources/Bridge.h" \
-    "$native_root"/Sources/*.swift "$output/Bridge.o" \
+    "$native_root"/Sources/*.swift "$native_root"/Modules/Improvements/*.swift "$output/Bridge.o" \
     -framework Cocoa -framework ApplicationServices -framework Carbon -framework ScreenCaptureKit -o "$app/Contents/MacOS/WindowFactory"
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

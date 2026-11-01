@@ -6,7 +6,7 @@ enum ImprovementHandoffTests {
         var assertions = 0
         func check(_ value: Bool, _ label: String) {assertions += 1; precondition(value,label)}
         func rejects(_ code: String, _ operation: () throws -> Void) {
-            do {try operation(); check(false,"expected \(code)")} catch {check((error as? AgentFailure)?.code == code,"expected \(code), got \(error)")}
+            do {try operation(); check(false,"expected \(code)")} catch {check(((error as? AgentFailure)?.code ?? (error as? ImprovementFailure)?.code) == code,"expected \(code), got \(error)")}
         }
         let fixture = root.appendingPathComponent("handoff"), repo = fixture.appendingPathComponent("repo with spaces & + symbols")
         try FileManager.default.createDirectory(at:repo.appendingPathComponent("Sources"),withIntermediateDirectories:true)

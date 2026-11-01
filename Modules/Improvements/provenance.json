@@ -1,0 +1,10 @@
+{
+  "module": "Improvements",
+  "revision": "f7e9a7c67ba813b64e5ee674a42f2cdbb865f7a0",
+  "files": {
+    "CodexHandoff.swift": "93d4a863a50f7f21955dc1f50716abbbe479e3260e72ed7b809cd2d857c50b6d",
+    "ImprovementApplication.swift": "5912941dd4153ab5ec19cba72c1621bf50f36e8db4a86696ba96a646074e6526",
+    "ImprovementStore.swift": "39dd61ffa281c03d160868035632f4ccd0c665c7ee5cf12a2de3792dd53c4b76",
+    "LegacyRecords.swift": "ac32c0f64cbe1edcf8124c06fda71fbd55427ae5fd4361dd56a93fe93d79afd0"
+  }
+}
