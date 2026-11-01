@@ -1,6 +1,6 @@
 # Improvement requests — Window Factory pilot
 
-Version: 1.7
+Version: 1.8
 Updated: 2026-11-01
 
 ## Two connected places
@@ -199,3 +199,18 @@ routing-first full URL selected Window Factory in the preview. Keep live transpo
 and final chat/callback assertions separate from URL fixture success. This is a
 version-sensitive integration, not a claim that URI parameter order generally
 has semantic meaning.
+
+## Acceptance result after Send
+
+The build-67 live pilot began with ChatGPT selected and displayed Codex /
+window-factory in the composer. After Send, the created coding chat still used
+the previous Improvements repository and had no confirmed saved-project membership.
+The preflight stopped before linking or product work. The external deep-link route
+therefore remains unaccepted despite successful URL fixtures and composer previews.
+
+A separate native `create_thread` control targeted the saved local Window Factory
+project and passed the actual working-directory, project-membership, link and
+outcome assertions. The synthetic request records that control result explicitly
+without claiming the external route fixed. The standalone Improvements project's
+`docs/routing-verification.md` owns the evidence and remaining integration boundary.
+Do not roll this external route into other apps until an accepted path is established.

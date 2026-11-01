@@ -6,6 +6,10 @@ Emit routing fields before the prompt and use strict RFC 3986 component encoding
 matching the successful full preview byte-for-byte. Preserve explicit project
 binding, existing requests and callbacks. URL fixtures verify reserved characters
 and the native integration checks the selected project separately.
+Subsequent live verification failed after Send: the composer showed the correct
+project, but the coding task retained the previous repository. A separate native
+project-creation control passed and delivered callbacks; the external deep-link
+route is not accepted as fixed.
 
 
 ## 2026-11-01 — bind the saved Codex project, build 66
