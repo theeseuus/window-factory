@@ -1,5 +1,18 @@
 # Source baseline
 
+## 2026-11-01 — explicit manual project handoff, build 69
+
+Adopt the owner-selected prepare/copy, choose/create project in Codex, paste/send
+workflow. Destination defaults to the app project, with existing-folder selection
+and a create dialog offering an existing repository or separate local folder/Git
+repository. Keep callback tokens stable; opening failure leaves copied tokens
+usable. Copied callbacks use the installed app executable across destinations.
+Separate-program outcomes are not described as installed in the origin app.
+UI and CLI share preparation, selection and bounded, non-overwriting project
+creation; partial failures are preserved. Automatic project/prompt URL delivery
+and background dispatch are not used by the normal action.
+
+
 ## 2026-11-01 — inspect the running handoff route, build 68
 
 Return non-content route diagnostics for new handoffs: running build, destination

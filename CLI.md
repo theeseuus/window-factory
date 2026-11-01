@@ -1,6 +1,6 @@
 # Window Factory CLI
 
-Version: 1.9
+Version: 1.10
 Updated: 2026-11-01
 
 `scripts/window-factory` (or the installed binary with `--cli`) provides JSON access to the running app's layout, application, tiling and direct window operations.
@@ -230,87 +230,56 @@ the report. Inspect it before another move; do not blindly retry a failed move
 because its first stage may already have completed.
 
 
-## Improvement requests and visible Codex handoff
+## Improvement requests and manual Codex handoff
 
-All commands use normal owner-controlled Agent access and return immediately in
-`result.tools`. They take no desktop context and do not require Accessibility or
-`--wait`. Only `improvement-open` opens another application's UI: it opens Codex's
-prepared composer (or an existing linked chat), with no model started by this app.
-The owner presses Send in Codex. The existing layout/window API remains separate.
+These commands require the running app's Agent access. They take no display or
+Space context and do not accept `--wait`. They do not launch a model. Preparation
+writes the clipboard explicitly; opening additionally navigates to a mode-only
+Codex composer. The owner selects/creates the project, starts a new chat, pastes
+and sends there. See [the UI workflow](docs/improvements.md).
 
-| Command | Result |
+| Command | Result and behavior |
 | --- | --- |
-| `improvement-agent [--repository PATH]` | `improvementAgent`: selected repository and `codex-desktop` route. An absolute Window Factory checkout path validates and saves the binding. |
-| `improvement-open --improvement UUID` | `improvement`: prepares a durable handoff, opens the documented Codex new-chat URL with path/prompt, and awaits owner Send. If already linked, opens that chat. |
-| `improvement-link --improvement UUID --handoff UUID --thread UUID` | Agent callback linking its current chat to the prepared request; returns the updated request and records working state. |
-| `improvements [--offset N]` | Up to 100 summaries, oldest first, plus total `improvementCount`; page with offsets 100, 200, etc. |
-| `improvements --improvement UUID` | Full original text/context, source version/build, notes, optional `handoffs` and historical `runs`. |
-| `improvement-submit --text TEXT [--context TEXT]` | Saves only; no model or UI. Stable request ID comes from `--request-id`, generated if omitted. |
-| `improvement-update --improvement UUID --revision N --state STATE --note TEXT [--target-build N]` | Appends a revision-checked progress/outcome note. |
+| `improvement-agent [--repository PATH] [--destination PATH|app]` | Read/configure origin and destination. Source validates as Window Factory; destination validates as an existing folder. `app` resets to origin. The old `--codex-project ID` setting is retained for compatibility and is not needed for manual preparation. |
+| `improvement-prepare --improvement UUID` | Prepare and copy the callback-capable prompt; open nothing. |
+| `improvement-open --improvement UUID` | Prepare/copy and open a mode-only Codex composer. If linked, open its existing chat without copying another task. |
+| `improvement-create-project --destination NEW_FOLDER` | Explicitly create an absent local folder and initialize Git through the owner Git tool, then select it as destination. Never replace, commit, publish or register Codex projects automatically. |
+| `improvement-link --improvement UUID --handoff UUID --thread UUID` | Agent callback links its actual current coding chat after workspace/project checks. |
+| `improvements [--improvement UUID | --offset N]` | Read full record or summaries (at most 100 per page), with total count. |
+| `improvement-submit --text TEXT [--context TEXT]` | Save only; stable ID comes from `--request-id`. |
+| `improvement-update --improvement UUID --revision N --state STATE --note TEXT [--target-build N]` | Append an idempotent, revision-checked note. |
 
-The old `improvement-dispatch` command is recognized for compatibility but returns
-`background_dispatch_disabled`, directing clients to the visible handoff. It is
-not advertised as a supported capability. No current API/UI path launches a new
-headless worker or falls back to the subscription CLI.
+States are queued, working, needs-input, implemented and declined. Implemented
+requires a positive target build; other states omit it. A separate destination's
+implementation is not described as installed in the origin app. The actual chat
+links before product work, and a thread cannot silently replace an existing link
+or belong to two different requests. The old `improvement-dispatch` returns
+`background_dispatch_disabled`; no background model route is enabled.
 
-States remain `queued`, `working`, `needs-input`, `implemented`, `declined`.
-`queued` is displayed as Saved for later, or Ready in Codex — press Send when a
-prepared handoff awaits its chat callback. Linked working status is explicitly a
-report from Codex, not a live activity feed. `implemented` requires a positive
-`--target-build`; other states omit it. Availability depends on the running build.
+Manual preparation uses handoff phase `prepared` and preserves unlinked tokens on
+recopy, including old automatic preparations. Opening failure keeps a copied token
+usable. Different destinations conflict rather than silently retargeting a saved
+preparation. `improvementRoute`, when returned by open, describes actual mode-only
+navigation and omits destination/request data; it does not prove task creation.
 
-Text and note bounds are 8,000 UTF-8 bytes, nonblank; context is at most 1,000 bytes.
-Submit retries with the same request ID return the record only if text, context
-and source agree. A handoff retains its token when reopened before linking; an
-identical improvement-link is idempotent. A different chat cannot replace a link,
-and a chat already linked to another request cannot claim this one. Callbacks use
-real UUIDs; URLs are constructed by the app rather than accepting arbitrary links.
+For project creation, generate one `--request-id` and preserve it on retry. The
+running app remembers successful creation IDs and never repeats that initialization
+or overwrites an existing folder. After restart, an existing folder is reported
+as `project_exists`; inspect it and select it explicitly rather than recreating
+it. Initializer failure preserves the partial folder. A disabled-access or lost
+response may follow completed work: inspect before retrying. Existing local repo
+creation and clipboard actions share their backend with the UI.
 
-Each handoff includes ID, creation time, repository, phase (`opened`, `linked`,
-`failed`) and optional `threadID`. Existing request files without handoffs/runs
-remain readable. The original request is preserved. No installed-data rewrite is
-needed, and agents must use the API instead of writing the file themselves.
+The installed app's absolute executable/`--cli` callback is included in the copied
+prompt, so a separate destination does not need the origin app's scripts. Use only
+the actual current `CODEX_THREAD_ID` value; do not dump environment/authentication
+state or borrow a different chat ID. `updates.count` is the numeric revision.
+For sandbox-denied local IPC, use normal approval and one identical retry. Rejected
+review or failed linking stops product work; callback delivery failure must remain
+visible in the coding chat without pretending the app received it.
 
-Agent callbacks require the running app and Agent access. The prepared prompt
-instructs the agent to obtain only the non-secret `CODEX_THREAD_ID` executor value,
-link first, and use normal approval review plus one identical retry if the tool
-sandbox blocks local callback IPC (for example transport_error, errno 1). Review
-rejection or a failed approved retry stops product work; no permission grants,
-identity changes, bypasses or alternate transport are authorized. This also applies
-to reads and outcome callbacks. Use a stable `--request-id` and unchanged payload
-for a write retry. The current numeric revision is `improvement.updates.count`,
-not an update UUID. Unresolved outcome failures are reported in the coding chat
-without repeating implementation or claiming delivery. It then follows normal
-repository policy, keeps notes in the app with revision-checked improvement-update,
-and discusses work in the native desktop chat. Installation/publication are separate.
-
-Errors include `repository_required`, `invalid_repository`, `codex_open_failed`,
-`chat_not_linked`, `handoff_not_found`, `handoff_conflict`, `invalid_handoff`,
-`request_conflict`, `request_finished`, `revision_conflict` and the disabled background
-route. Unknown improvement IDs return `improvement_not_found`; invalid content
-returns `invalid_improvement`. Corrupt/unsupported catalog data is never reset or
-overwritten; reads/writes fail explicitly. See [the pilot workflow](docs/improvements.md)
-for recovery, progress semantics and the verified desktop-integration boundary.
-
-## Codex project binding (build 66)
-
-`improvement-agent --repository PATH --codex-project ID` binds the selected source
-repository to its saved local Codex project. Both values are required when setting
-a binding. Obtain ID from the desktop project-list tool and verify its canonical
-path matches PATH; project names alone are not sufficient. The app cannot verify
-the desktop registry through its local callback transport, so setup must establish
-that association before sending requests. The handoff chat independently verifies
-its actual workspace and membership before product work.
-
-Calling `improvement-agent` without options reads the current configuration,
-including optional `codexProjectID`. A repository-only update preserves the ID for
-the same repository and clears it for a changed repository. New handoffs require
-the binding (`codex_project_required` if missing); this command does not change
-credentials, macOS permissions or the selected model. Use normal local IPC approval
-review for a sandbox-denied setup call; never edit the app's data files directly.
-
-Build 68 adds optional `result.tools.improvementRoute` to successful new
-`improvement-open` responses. It reports actual running build, mode, project ID,
-repository, query order, encoded size and URL SHA-256, omitting request text.
-An already-linked chat reopen omits it. These fields diagnose app output and do
-not prove the receiving desktop created the requested execution context.
+Request text is bounded at 8,000 UTF-8 bytes, context at 1,000 and notes at 8,000.
+Private schema-1 catalogs are preserved on decode/validation failure. Original text,
+source build and context stay intact; updates append. Agent setup does not enable
+access, change macOS grants, register a Codex project, install/restart the app,
+select credentials or publish. Legacy build-58 run receipts remain recovery-only.

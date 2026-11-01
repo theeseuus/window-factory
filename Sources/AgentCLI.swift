@@ -5,10 +5,12 @@ enum AgentCLI {
     static let help = """
     Window Factory CLI (JSON; running app and Agent access required)
       window-factory status | capabilities | layouts | apps | tiling-status | layout-export
-      window-factory improvement-agent [--repository PATH [--codex-project ID]]
+      window-factory improvement-agent [--repository PATH] [--destination PATH|app]
+      window-factory improvement-prepare --improvement UUID
+      window-factory improvement-create-project --destination NEW_FOLDER
       window-factory improvement-open --improvement UUID
       window-factory improvement-link --improvement UUID --handoff UUID --thread UUID
-        Open prepares a visible Codex chat; press Send there to start. Link is its agent callback.
+        Prepare copies the prompt. Open also navigates to Codex; select/create the project, start a new chat, paste and send.
         The old improvement-dispatch background route is disabled.
       window-factory improvements [--improvement UUID | --offset N]
       window-factory improvement-submit --text TEXT [--context TEXT] [--request-id UUID]
@@ -53,6 +55,7 @@ enum AgentCLI {
             case "--thread":guard let id=UUID(uuidString:value) else{throw AgentFailure("invalid_arguments","Invalid chat ID.")};request.threadID=id
             case "--repository":request.repository=value
             case "--codex-project":request.codexProjectID=value
+            case "--destination":request.destinationRepository=value
             case "--text":request.text=value
             case "--context":request.context=value
             case "--state":request.state=value

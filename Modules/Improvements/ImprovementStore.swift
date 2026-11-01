@@ -37,10 +37,14 @@ public struct Improvement: Codable, Equatable, Identifiable {
     public func status(runningBuild: Int?) -> String {
         if let run = runs?.last, run.active {return run.phase == "launching" ? "Starting agent…" : "Agent running"}
         if let handoff = handoffs?.last {
+            if handoff.phase == "prepared", handoff.threadID == nil, ![.implemented,.declined].contains(state) {return "Prepared for Codex — paste and send"}
             if handoff.phase == "opened", handoff.threadID == nil, ![.implemented,.declined].contains(state) {return "Ready in Codex — press Send"}
             if handoff.threadID != nil, state == .working {return "In progress · reported by Codex"}
         }
         guard state == .implemented else { return state.title }
+        if let handoff = handoffs?.last, let origin = handoff.originRepository, origin != handoff.repository {
+            return "Implemented in destination project"
+        }
         if let target = updates.last?.targetBuild, let runningBuild, runningBuild >= target {
             return "Available in this build"
         }
@@ -138,21 +142,36 @@ public final class ImprovementStore {
         catalog.requests[index].updates.append(ImprovementUpdate(id:operationID, date:Date(), state:state, note:note, targetBuild:targetBuild))
         try save(catalog); return catalog.requests[index]
     }
-    public func prepareHandoff(_ id: UUID, handoffID: UUID, repository: String) throws -> ImprovementHandoff {
+    public func prepareHandoff(_ id: UUID, handoffID: UUID, repository: String, manual: Bool = false, originRepository: String? = nil) throws -> ImprovementHandoff {
         var catalog = try load()
         guard let index = catalog.requests.firstIndex(where:{$0.id == id}) else {throw ImprovementFailure("improvement_not_found", "No improvement has that ID.")}
         if let owner = catalog.requests.first(where:{$0.handoffs?.contains(where:{$0.id == handoffID}) == true}) {
             guard owner.id == id else {throw ImprovementFailure("request_conflict", "This handoff ID belongs to another request.")}
-            return owner.handoffs!.first(where:{$0.id == handoffID})!
+            let position = catalog.requests[index].handoffs!.firstIndex(where:{$0.id == handoffID})!
+            guard catalog.requests[index].handoffs![position].repository == repository else {throw ImprovementFailure("handoff_conflict", "This handoff belongs to another repository.")}
+            if manual, catalog.requests[index].handoffs![position].phase == "opened" {
+                catalog.requests[index].handoffs![position].phase = "prepared"
+                catalog.requests[index].handoffs![position].originRepository = originRepository
+                try save(catalog)
+            }
+            return catalog.requests[index].handoffs![position]
         }
         guard ![.implemented,.declined].contains(catalog.requests[index].state) else {
             throw ImprovementFailure("request_finished", "This request already has an outcome. Open its chat or save a new request.")
         }
-        if let existing = catalog.requests[index].handoffs?.last, existing.phase == "opened", existing.threadID == nil {
+        if let existing = catalog.requests[index].handoffs?.last, ["opened","prepared"].contains(existing.phase), existing.threadID == nil {
             guard existing.repository == repository else {throw ImprovementFailure("handoff_conflict", "The prepared request belongs to another repository. Resolve that handoff before changing its destination.")}
+            if manual, existing.phase == "opened" {
+                let position = catalog.requests[index].handoffs!.count - 1
+                catalog.requests[index].handoffs![position].phase = "prepared"
+                catalog.requests[index].handoffs![position].originRepository = originRepository
+                try save(catalog)
+                return catalog.requests[index].handoffs![position]
+            }
             return existing
         }
-        let handoff = ImprovementHandoff(id:handoffID,createdAt:Date(),repository:repository)
+        var handoff = ImprovementHandoff(id:handoffID,createdAt:Date(),repository:repository)
+        if manual {handoff.phase = "prepared"; handoff.originRepository = originRepository}
         catalog.requests[index].handoffs = (catalog.requests[index].handoffs ?? []) + [handoff]
         try save(catalog); return handoff
     }
@@ -173,7 +192,7 @@ public final class ImprovementStore {
             guard existing == threadID else {throw ImprovementFailure("request_conflict", "Another chat is already linked to this handoff. Stop here and use that chat.")}
             return catalog.requests[index]
         }
-        guard catalog.requests[index].handoffs![link].phase == "opened",
+        guard ["opened","prepared"].contains(catalog.requests[index].handoffs![link].phase),
               ![.implemented,.declined].contains(catalog.requests[index].state) else {
             throw ImprovementFailure("request_finished", "This handoff is no longer awaiting a chat. Do not start another implementation.")
         }

@@ -6,14 +6,15 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
     let store: ImprovementStore
     private let preferences: FactoryPreferences
     private let dispatcher: ImprovementDispatcher?
+    private let projectPicker = NSPopUpButton(frame:.zero,pullsDown:false)
     private let agentLabel = NSTextField(wrappingLabelWithString:"")
     private let openChatButton = NSButton(title:"Open chat",target:nil,action:nil)
-    private let sendSelectedButton = NSButton(title:"Open selected in Codex…",target:nil,action:nil)
+    private let sendSelectedButton = NSButton(title:"Copy selected & open…",target:nil,action:nil)
     private let input = NSTextView()
     private let contextField = NSTextField(string:"")
     private let table = NSTableView()
     private let detail = NSTextView()
-    private let message = NSTextField(wrappingLabelWithString:"Save for later, or open a Codex chat. Press Send in Codex to start work.")
+    private let message = NSTextField(wrappingLabelWithString:"Choose a destination, then copy the request. In Codex, select or create that project, start a new chat, paste and send.")
     private let copyButton = NSButton(title:"Copy selected request for agent", target:nil, action:nil)
     private var rows: [Improvement] = []
     private var draftID = UUID()
@@ -35,13 +36,15 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         let build = NSTextField(labelWithString:"Window Factory \(store.version) · Build \(store.build)")
         build.textColor = .secondaryLabelColor
         let save = NSButton(title:"Save for later",target:self,action:#selector(saveForLater)); save.bezelStyle = .rounded
-        let send = NSButton(title:"Open in Codex…",target:self,action:#selector(sendNow)); send.bezelStyle = .rounded
+        let send = NSButton(title:"Copy & open Codex…",target:self,action:#selector(sendNow)); send.bezelStyle = .rounded
         send.isEnabled = dispatcher != nil
         let actions = NSStackView(views:[build,NSView(),save,send]); actions.spacing = 12
         agentLabel.textColor = .secondaryLabelColor; agentLabel.font = .systemFont(ofSize:12)
-        let choose = NSButton(title:"Repository…",target:self,action:#selector(chooseRepository)); choose.bezelStyle = .rounded
-        choose.isEnabled = dispatcher != nil
-        let agentRow = NSStackView(views:[agentLabel,NSView(),choose]); agentRow.spacing = 8
+        projectPicker.target = self; projectPicker.action = #selector(destinationChosen)
+        projectPicker.setAccessibilityLabel("Destination project")
+        let projectLabel = NSTextField(labelWithString:"Destination:")
+        let agentRow = NSStackView(views:[projectLabel,projectPicker,agentLabel]); agentRow.spacing = 8
+        projectPicker.setContentHuggingPriority(.defaultHigh,for:.horizontal)
         let historyLabel = NSTextField(labelWithString:"Previous requests")
         historyLabel.font = .systemFont(ofSize:14,weight:.semibold)
         let column = NSTableColumn(identifier:NSUserInterfaceItemIdentifier("request"))
@@ -55,7 +58,7 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         let refresh = NSButton(title:"Refresh",target:self,action:#selector(refreshHistory)); refresh.bezelStyle = .rounded
         sendSelectedButton.target = self; sendSelectedButton.action = #selector(sendSelected); sendSelectedButton.bezelStyle = .rounded
         openChatButton.target = self; openChatButton.action = #selector(openLinkedChat); openChatButton.bezelStyle = .rounded
-        copyButton.title = "Copy request"
+        copyButton.title = "Copy prepared request"
         let footer = NSStackView(views:[openChatButton,sendSelectedButton,copyButton,refresh]); footer.spacing = 8
         let stack = NSStackView(views:[prompt,hint,inputScroll,contextLabel,contextField,actions,agentRow,message,historyLabel,history,detailScroll,footer])
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 8
@@ -116,23 +119,83 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         guard let dispatcher else {return}
         do {
             if try dispatcher.configuration().repository == nil, !pickRepository() {
-                message.stringValue = "Saved for later. Choose a repository to prepare the Codex chat."; return
+                message.stringValue = "Saved for later. Choose the app's source project before preparing a request."; return
             }
             _ = try dispatcher.openRequest(id)
-            message.stringValue = "Opened Codex. Check the project and model, then press Send there to start."
-        } catch {message.stringValue = "Request saved; handoff could not open: \(error.localizedDescription)"}
+            message.stringValue = "Copied. In Codex, select or create the destination project, start a NEW chat there, paste (⌘V), choose the model and press Send."
+        } catch {message.stringValue = error.localizedDescription}
         reloadHistory()
     }
-    @objc private func chooseRepository() {_ = pickRepository(); reloadHistory()}
+    @objc private func destinationChosen() {
+        guard let dispatcher, !dispatcher.isCreatingProject else {return}
+        let tag = projectPicker.selectedItem?.tag ?? 0
+        do {
+            switch tag {
+            case 0:
+                if try dispatcher.configuration().repository == nil, !pickRepository() {break}
+                _ = try dispatcher.configureDestination(nil)
+            case 10:
+                if try dispatcher.configuration().repository == nil, !pickRepository() {break}
+                _ = pickDestination()
+            case 11:
+                if try dispatcher.configuration().repository == nil, !pickRepository() {break}
+                createProject()
+            case 12: _ = pickRepository()
+            default: break
+            }
+        } catch {message.stringValue = error.localizedDescription}
+        reloadHistory()
+    }
     private func pickRepository() -> Bool {
         guard let dispatcher else {return false}
         let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false; panel.title = "Choose the Window Factory source repository"
-        panel.prompt = "Use repository"
+        panel.allowsMultipleSelection = false; panel.title = "Choose the Window Factory source project"
+        panel.prompt = "Use app project"
         if let path = try? dispatcher.configuration().repository {panel.directoryURL = URL(fileURLWithPath:path)}
         guard panel.runModal() == .OK, let url = panel.url else {return false}
         do {_ = try dispatcher.configure(repository:url.path); return true}
         catch {message.stringValue = error.localizedDescription; return false}
+    }
+    private func pickDestination() -> Bool {
+        guard let dispatcher else {return false}
+        let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false; panel.title = "Choose an existing destination project folder"
+        panel.prompt = "Use destination"
+        if let config = try? dispatcher.configuration(), let path = config.destinationRepository ?? config.repository {
+            panel.directoryURL = URL(fileURLWithPath:path)
+        }
+        guard panel.runModal() == .OK, let url = panel.url else {return false}
+        do {
+            _ = try dispatcher.configureDestination(url.path)
+            message.stringValue = "Destination selected. Select or add this folder as a project in Codex when you paste the request."
+            return true
+        } catch {message.stringValue = error.localizedDescription; return false}
+    }
+    private func createProject() {
+        guard let dispatcher else {return}
+        let alert = NSAlert(); alert.messageText = "Create a project"
+        alert.informativeText = "Use an existing repository for a Codex project, or create a separate local folder and repository. Add/select the resulting folder in Codex; no chat starts here."
+        alert.addButton(withTitle:"Existing repository…")
+        alert.addButton(withTitle:"New folder & repository…")
+        alert.addButton(withTitle:"Cancel")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: _ = pickDestination()
+        case .alertSecondButtonReturn:
+            let panel = NSSavePanel(); panel.title = "Create a separate project folder and repository"
+            panel.prompt = "Create"; panel.nameFieldStringValue = "New project"
+            panel.canCreateDirectories = true
+            if let path = try? dispatcher.configuration().repository {panel.directoryURL = URL(fileURLWithPath:path).deletingLastPathComponent()}
+            guard panel.runModal() == .OK, let url = panel.url else {return}
+            message.stringValue = "Creating the local project repository…"
+            Task { @MainActor [weak self] in
+                do {
+                    _ = try await dispatcher.createProject(url.path)
+                    self?.message.stringValue = "Local repository created. Add/select its folder as a project in Codex, then paste and send the prepared request."
+                } catch {self?.message.stringValue = error.localizedDescription}
+                self?.reloadHistory()
+            }
+        default: break
+        }
     }
     @objc func refreshHistory() {
         do {try dispatcher?.reconcile()} catch {message.stringValue = "Agent status could not be refreshed: \(error.localizedDescription)"}
@@ -142,8 +205,23 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         let selectedID = selected?.id
         do {
             let config = try dispatcher?.configuration()
-            agentLabel.stringValue = "Codex app · Choose model there · " + (config?.repository.map {URL(fileURLWithPath:$0).lastPathComponent} ?? "Choose repository")
-            agentLabel.toolTip = "Visible handoff. Repository: \(config?.repository ?? "not selected"). Press Send in Codex to start. Chat progress and outcome notes link back here. Implemented changes await installation."
+            projectPicker.removeAllItems()
+            func item(_ title: String, tag: Int) {projectPicker.addItem(withTitle:title); projectPicker.lastItem?.tag = tag}
+            item("Window Factory (app project)",tag:0)
+            if let destination = config?.destinationRepository {
+                item(URL(fileURLWithPath:destination).lastPathComponent,tag:1)
+                projectPicker.selectItem(withTag:1)
+            } else {projectPicker.selectItem(withTag:0)}
+            projectPicker.menu?.addItem(.separator())
+            item("Choose existing project…",tag:10)
+            item("Create project…",tag:11)
+            item("Set app source project…",tag:12)
+            projectPicker.menu?.autoenablesItems = false
+            projectPicker.isEnabled = dispatcher != nil && dispatcher?.isCreatingProject == false
+            let destination = config?.destinationRepository ?? config?.repository
+            agentLabel.stringValue = dispatcher?.isCreatingProject == true ? "Creating…" : "Select/create it in Codex · paste & send"
+            agentLabel.toolTip = destination ?? "Choose the app's source project"
+            projectPicker.toolTip = destination ?? "App project has not been configured"
             rows = try store.all().reversed(); table.reloadData()
             if let selectedID, let index = rows.firstIndex(where:{$0.id == selectedID}) {table.selectRowIndexes(IndexSet(integer:index),byExtendingSelection:false)}
             showDetail()
@@ -160,7 +238,9 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         for handoff in value.handoffs ?? [] {
             text += "\n\nCodex handoff · \(handoff.phase)\nRepository: \(handoff.repository)"
             if let threadID = handoff.threadID {text += "\nChat: \(ImprovementHandoffLink.chatURL(threadID).absoluteString)"}
-            else if handoff.phase == "opened" {text += "\nPress Send in the prepared Codex chat to begin. The chat links back when the agent starts."}
+            else if handoff.phase == "prepared" {text += "\nSelect/create this project in Codex, start a new chat, paste the copied request and send. The chat links back when the agent starts."}
+            else if handoff.phase == "opened" {text += "\nEarlier automatic handoff. Prepare this request again for manual paste/send."}
+            if let origin = handoff.originRepository, origin != handoff.repository {text += "\nOrigin app project: \(origin)"}
         }
         for run in value.runs ?? [] {
             text += "\n\nAgent run \(run.id.uuidString) · \(run.phase)\nRepository: \(run.repository)"
@@ -170,7 +250,7 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         return text + "\n\nRequest \(value.id.uuidString) · Revision \(value.revision)"
     }
     private func showDetail() {
-        copyButton.isEnabled = selected != nil
+        copyButton.isEnabled = dispatcher != nil && selected.map {![.implemented,.declined].contains($0.state) && !($0.handoffs?.contains(where:{$0.threadID != nil}) ?? false) && !($0.runs?.last?.active ?? false)} == true
         openChatButton.isEnabled = dispatcher != nil && selected?.handoffs?.contains(where:{$0.threadID != nil}) == true
         sendSelectedButton.isEnabled = dispatcher != nil && selected.map {value in
             ![.implemented,.declined].contains(value.state) && !(value.runs?.last?.active ?? false) && !(value.handoffs?.contains(where:{$0.threadID != nil}) ?? false)
@@ -178,10 +258,12 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         detail.string = selected.map(description) ?? (rows.isEmpty ? "No requests yet." : "Select a request to see its context and outcome.")
     }
     @objc private func copyRequest() {
-        guard let selected else {return}
-        let text = "Window Factory improvement request\n\n" + description(selected) + "\n\nUse the repository's improvement workflow (docs/improvements.md). Investigate this intended outcome under existing repository and machine authority."
-        NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text,forType:.string)
-        message.stringValue = "Copied. Paste into the Window Factory development chat to pick it up now."
+        guard let selected, let dispatcher else {return}
+        do {
+            _ = try dispatcher.prepareRequest(selected.id)
+            message.stringValue = "Prepared request copied. In Codex, select/create the destination project, start a new chat, paste (⌘V) and send."
+        } catch {message.stringValue = error.localizedDescription}
+        reloadHistory()
     }
     func numberOfRows(in tableView: NSTableView) -> Int {rows.count}
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {

@@ -169,7 +169,7 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
                 spaceIndicator?.newCodexChord = { [weak creationKey] in creationKey?.chord }
                 spaceIndicator?.newCodexAvailable = { [weak creator] in creator?.available("com.openai.codex") == true }
                 let service=AgentService(preferences:preferences,library:library);agent=service;settings?.agent=service
-                service.improvementOperation = { try dispatcher.handle($0) }
+                service.improvementOperation = { try await dispatcher.handle($0) }
                 service.extraBusy = { [weak self] in self?.geometry?.isBusy == true || self?.focus?.isBusy == true || self?.stash?.isBusy == true || self?.accordion?.isBusy == true || self?.spaceMove?.isMoving == true || self?.switcher?.isOpen == true || self?.tiling?.controller.isBusy == true || self?.newWindow?.isBusy == true || self?.applications?.isLaunching == true || self?.systemCommands?.isBusy == true }
                 let tools=AgentTools(library:library,apps:appLauncher,creation:creator,tiling:feature.controller);agentTools=tools
                 let direct=AgentDirectWindows(geometry:geometry!,stash:stash!,move:spaceMove!,accordion:accordion!);agentWindows=direct

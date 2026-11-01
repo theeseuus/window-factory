@@ -5,24 +5,28 @@ public struct ImprovementHandoff: Codable, Equatable {
     public let id: UUID, createdAt: Date, repository: String
     public var phase = "opened"
     public var threadID: UUID?
+    public var originRepository: String?
 }
 
 public enum ImprovementHandoffLink {
+    /// Open Codex without preselecting a project or embedding a request; the owner chooses there.
+    public static func manualComposerURL() -> URL {URL(string:"codex://threads/new?mode=codex")!}
     public static func chatURL(_ id: UUID) -> URL {URL(string:"codex://threads/\(id.uuidString.lowercased())")!}
     public static func prompt(request: Improvement, handoff: ImprovementHandoff, application: ImprovementApplication) throws -> String {
         struct Input: Encodable {
-            let requestID: UUID, handoffID: UUID, text: String, context: String, sourceBuild: String, repository: String
+            let requestID: UUID, handoffID: UUID, text: String, context: String, sourceBuild: String, repository: String, originRepository: String?
         }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted,.sortedKeys]
-        let data = Input(requestID:request.id,handoffID:handoff.id,text:request.text,context:request.context,sourceBuild:request.build,repository:handoff.repository)
+        let data = Input(requestID:request.id,handoffID:handoff.id,text:request.text,context:request.context,sourceBuild:request.build,repository:handoff.repository,originRepository:handoff.originRepository)
         let body = String(decoding:try encoder.encode(data),as:UTF8.self)
         return """
         \(application.name) improvement — request \(request.id.uuidString)
         The owner prepared this request in \(application.name) and pressed Send here in Codex.
-        Work in this chat and the selected \(application.name) repository. Follow AGENTS.md,
-        machine policy and \(application.instructionsPath). Do not start other agents or pick up saved backlog.
+        Work in this chat and the destination repository in the JSON below. Follow applicable
+        AGENTS.md and machine policy; read \(application.instructionsPath) if present.
+        Do not start other agents or pick up saved backlog.
 
-        This request belongs in ONE local Codex coding chat in the application's saved project.
+        This request belongs in ONE local Codex coding chat in the selected destination project.
         Before linking, verify that this chat's working directory resolves to the repository
         in the request JSON. If the workspace is wrong, stop and ask the owner to select the
         correct Codex project; do not work from a generated projectless folder or create a

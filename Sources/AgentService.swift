@@ -14,7 +14,7 @@ final class AgentService {
     private var seen: [UUID:AgentRequest] = [:]
     private var requestJobs: [UUID:UUID] = [:]
     private var activeJob: UUID?
-    var improvementOperation: ((AgentRequest) throws -> AgentToolResult)?
+    var improvementOperation: (@MainActor (AgentRequest) async throws -> AgentToolResult)?
     var stashedWindowIDs: ()->[UInt32] = {[]}
     var spaceMoveDiagnostic: ()->SpaceMoveDiagnosticReport? = {nil}
     var extraBusy: ()->Bool = { false }
@@ -69,9 +69,10 @@ final class AgentService {
             case .apps,.tilingStatus,.layoutExport:
                 payload.tools=try await backend.toolQuery(decoded)
                 guard enabled else{throw AgentFailure("agent_disabled","Agent access was disabled.")}
-            case .improvements, .improvementSubmit, .improvementUpdate, .improvementAgent, .improvementDispatch, .improvementOpen, .improvementLink:
+            case .improvements, .improvementSubmit, .improvementUpdate, .improvementAgent, .improvementDispatch, .improvementOpen, .improvementLink, .improvementPrepare, .improvementCreateProject:
                 guard let improvementOperation else {throw AgentFailure("unavailable", "Improvement store unavailable.")}
-                payload.tools = try improvementOperation(decoded)
+                payload.tools = try await improvementOperation(decoded)
+                guard enabled else {throw AgentFailure("agent_disabled", "Agent access was disabled; inspect any completed project creation before retrying.")}
             case .job:
                 guard let id=decoded.jobID,let job=jobs[id] else {throw AgentFailure("job_not_found","Job is unknown or its result expired; it has not been resubmitted.")};payload.job=job
             case .cancel:

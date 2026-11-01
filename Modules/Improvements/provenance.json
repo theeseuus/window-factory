@@ -1,10 +1,10 @@
 {
   "module": "Improvements",
-  "revision": "001b98ad2d82068dced43cf251cfd672cd28fbc6",
+  "revision": "7cd33ee22601b8bdd70896e971bfddf59f1f82d1",
   "files": {
-    "CodexHandoff.swift": "05127c5b1e5c81a1efde24d23f80f24d62577e8c57f4fa78c2523638744d38eb",
+    "CodexHandoff.swift": "d6338ce305e0802702b4674fb01e3be0cb438c317df69c28cfefd65a41247414",
     "ImprovementApplication.swift": "5912941dd4153ab5ec19cba72c1621bf50f36e8db4a86696ba96a646074e6526",
-    "ImprovementStore.swift": "39dd61ffa281c03d160868035632f4ccd0c665c7ee5cf12a2de3792dd53c4b76",
+    "ImprovementStore.swift": "fc2597cb45d6660ca14978969c4c532ae3628a353a9acdd7c5528916943aad46",
     "LegacyRecords.swift": "ac32c0f64cbe1edcf8124c06fda71fbd55427ae5fd4361dd56a93fe93d79afd0"
   }
 }

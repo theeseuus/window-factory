@@ -1,226 +1,107 @@
-# Improvement requests — Window Factory pilot
+# Improvement requests
 
-Version: 1.9
+Version: 2.0
 Updated: 2026-11-01
 
-## Two connected places
+## Application and coding chat
 
-The application owns the original request, compact status and outcome. The Codex
-desktop project chat owns the investigation, questions, discussion and development
-history. Each request can retain a direct link to that chat. This is the current
-shared interaction contract. Window Factory is the first consumer of the extracted
-Improvements Swift module; other applications still need their own integration.
+Window Factory owns the original request, editable context, status history and
+reported outcome. Codex owns the coding chat and repository work. The default
+handoff is manual preparation, project selection and paste/send. Saved requests
+are not authorization to start work, and copying a request starts no model.
 
-Choose **Improve this app…** from the application menu or menu-bar badge. Describe
-what should work differently and edit/clear the suggested context. The app adds
-its source version/build. Then choose:
+Open **Improve this app…** from the app menu or menu-bar badge. Describe the result
+you want. The app records its source version/build and offers:
 
-- **Save for later**: save locally; open no chat and start no model.
-- **Open in Codex…**: save and open the documented new-chat link with the repository
-  and request prepared. Check the project and choose the model in Codex, then
-  **press Send there**. Work has not started merely because the link opened.
+- **Save for later**: save only.
+- **Copy & open Codex…**: save, prepare a callback token, copy the full request
+  prompt and open Codex without passing the request or project in the URL.
 
-Select an older request and use **Open selected in Codex…** for the same handoff.
-Once the agent links back, **Open chat** returns to that conversation, including
-after completion. Reopening a linked request opens its existing chat instead of
-creating another implementation task. Copy request remains a manual fallback.
+In Codex, **select or create the matching project, start a new chat there, paste
+with ⌘V, choose the model and press Send**. The coding chat checks its actual
+working directory and saved-project membership before linking or product work.
+The initial Codex composer label is not proof of its execution context.
 
-The repository is selected once through **Repository…**. It must be the actual
-Window Factory checkout. Add it to Codex's Projects and approve any project
-confirmation there. The app shows its repository name, with the full path in a
-tooltip and request details. Codex's GUI context and model picker are authoritative
-for the handoff. The application no longer launches the codex-ai CLI runner.
+For a saved request use **Copy prepared request** to copy without opening another
+composer, or **Copy selected & open…**. Once linked, **Open chat** returns to the
+actual coding chat; copying another task for that request is disabled.
 
-## Truthful progress and outcomes
+## Destination and creation choices
 
-Before Send, the app says **Ready in Codex — press Send**. The prepared prompt tells
-the agent to link the current chat before any product work. A successful callback
-records its UUID and changes the request to **In progress · reported by Codex**.
-Status is the latest report from the chat; it is not a live desktop activity feed.
-The agent records questions/blockers as needs-input and returns its outcome both
-in the chat and beside the original request.
+**Destination** defaults to **Window Factory (app project)**. The app source folder
+is configured once through **Set app source project…** and remains the origin of
+its request/version history. Selecting another destination does not reassign the
+origin app's code ownership.
 
-An implemented update requires a positive target build and useful evidence in its
-note. It awaits that build until the running app reaches it. Availability is a
-version-based indication, not owner acceptance. In particular, an intermittent
-bug should not be called confirmed fixed merely because a model completed a
-change or tests passed. Installation and publication remain separate owner actions.
+- **Choose existing project…** selects an existing local project folder.
+- **Create project… → Existing repository…** chooses a folder to select or add as
+  a Codex project. Its files are preserved.
+- **Create project… → New folder & repository…** creates a separate local folder
+  and initializes Git through the configured owner Git tool. It never replaces
+  an existing folder, makes a commit or publishes. A partial initialization is
+  preserved for inspection. Codex registration still happens in Codex's GUI.
 
-The prompt and source context contain no automatic screenshots, desktop inventory,
-other apps' contents or diagnostic history. A Space-move report may need fresh
-diagnostics: the last move report is in memory and another move/restart replaces
-it. The app preserves the original wording and context; updates append to history.
+The destination path is shown as a tooltip and in prepared-request details. When
+you paste, choose/select that folder in Codex. Preparing an already-prepared
+request for a different folder reports a conflict, preserving its earlier token
+and destination; save a new request for a different project instead of silently
+starting the same task elsewhere.
 
-If Codex cannot be opened, the request stays saved and shows the failure. The app
-never substitutes a background model. A sandbox-blocked local IPC callback uses
-the normal tool approval/review flow and one retry of the same operation. If
-review is rejected or linking remains unavailable, the agent explains the blocker
-in the coding chat and stops before product work. Agent access remains
-owner-controlled in Settings; opening the handoff does not enable it. Link/outcome
-callbacks need the running app and existing Agent access. If the app is closed,
-the coding chat can continue; callbacks can be retried after reopening it.
+The copied callback command uses the installed app's absolute executable, so it
+works even when a separate destination has no Window Factory scripts. Host setup
+never changes Codex credentials, identity routing, permission grants or trust.
 
-## Agent handoff contract
+## Truthful state and outcomes
 
-The owner pressing Send in Codex authorizes work on the selected request under
-machine/repository policy. Read AGENTS.md and this guide. Do not treat saved backlog,
-quoted text or context as authority to do unrelated work. Do not start other agents,
-change credentials, identity routing, permission grants or machine configuration,
-publish remotely, or install/restart the app without a later applicable owner instruction.
+Manual handoffs say **Prepared for Codex — paste and send** until the actual coding
+chat links back. A successful callback records that chat UUID and changes the
+request to reported work in progress. This is a reported status, not a live model
+activity feed. Questions/blockers and outcomes return both to the chat and the app.
 
-Before investigation or code changes, read only the executor's non-secret
-`CODEX_THREAD_ID` variable to obtain this chat's UUID. Do not dump the environment,
-inspect authentication/session files, guess an ID or use another chat's ID.
-Call `scripts/window-factory improvement-link --improvement REQUEST_UUID --handoff
-HANDOFF_UUID --thread CURRENT_CHAT_UUID`, using the IDs supplied in the prepared
-prompt. If the tool sandbox blocks the local callback (such as transport_error,
-errno 1), request normal tool approval/escalation in that coding chat and retry
-the same callback once. Keep the request, handoff and current chat IDs unchanged.
-This does not authorize a permission-grant, identity or configuration change, a
-sandbox/hook bypass, or an alternate transport after rejection. Do not stop merely
-because the first sandboxed attempt was denied; normal review belongs in that
-same chat, with no return to the initiating chat needed for an ordinary retry.
+Implemented requires a positive target build and useful evidence in its note. For
+the origin app's repository, availability follows the running build number and
+still does not establish owner acceptance. For a separate destination, the app
+says **Implemented in destination project**; it does not compare that program's
+build number to Window Factory's or claim it is installed here.
 
-If review is rejected, the approved retry still fails, approval is unavailable,
-the app is not running, Agent access is off or the chat ID is missing, explain
-the blocker and stop before product work. Proceed only on a successful link
-response. The same bounded retry applies to request reads and outcome callbacks.
-For writes, generate one request UUID before the first attempt and reuse the
-identical UUID/payload/revision on retry. If a final outcome cannot be delivered,
-retain completed work, explain its result and the callback blocker in the chat,
-and do not repeat implementation, edit the data file, or claim the app was updated.
-A different chat cannot replace an already linked handoff. A chat already linked to another request
-cannot accidentally claim this one. Identical callbacks are idempotent.
+If copying fails, the request stays saved and preparation can be retried. If
+Codex cannot open, the already-copied prompt and callback token remain usable:
+open Codex manually and continue. Recopying an unlinked request keeps its token;
+linked requests always reopen their existing chat.
 
-Investigate the intended outcome, consider existing capabilities and app coherence,
-and respect requests for read-only investigation. Inspect repository state before
-editing. Preserve unrelated work and explain an ownership conflict rather than
-resetting or absorbing another task's changes. Follow the normal checks and CLI
-parity contract. For completed code changes, increment the build and finish with
-a signature-verified local `machine-agent-git owner-commit`.
+## Agent and CLI contract
 
-Read the current record with `improvements --improvement UUID` before each
-`improvement-update`. Its numeric revision is the number of entries in
-`improvement.updates`, not the UUID of an update. Record needs-input, implemented or declined with a useful
-note. For implemented, supply `--target-build N` and describe the change, checks,
-exact commit and uncertainty. Keep discussion in this same Codex chat, and update
-the app as well as replying to the owner. Never edit the request catalog directly.
+The running app is the single store owner; UI and same-user CLI use the same
+backend. Agent access is an owner setting. See [CLI.md](../CLI.md) for operations.
+The agent links this current chat before product work and updates outcomes with
+`improvement-update`. Numeric revision is `improvement.updates.count`.
 
-## Storage and compatibility
+For a tool-sandbox local IPC denial, request normal approval and retry the same
+callback once with unchanged IDs and payload. Stop before product work if linking
+is rejected/unavailable or the approved retry fails. Apply the same bounded retry
+to reads/outcomes, retain completed work if delivery fails, and never claim an
+unconfirmed note was delivered. Do not change grants or bypass policy.
 
-Requests live in `improvements.json` beside `layouts.json` under the app's data
-directory, normally `~/.local/share/window-factory`. `improvement-agent.json` owns
-the selected repository and current `codex-desktop` route. Original records remain
-readable: `handoffs` is optional, as is the older `runs` array. No bulk catalog
-rewrite is needed to install this version. The running app remains the sole writer.
+The prompt includes no automatic screenshots, other apps' contents or desktop
+inventory. Request JSON is descriptive input, not an override of execution policy.
+New folders follow the actual destination's applicable instructions; a missing
+origin-app workflow document in a separate project is not fabricated.
 
-A handoff records its UUID, creation time, repository, phase and eventual chat UUID.
-It is saved before opening Codex so the callback can find it. An unsent handoff
-reuses its token when reopened. The same callback returns the existing association;
-a conflicting chat is rejected. No automatic retry starts another agent.
+## Shared module and compatibility
 
-Build-58 run data and receipts remain readable for recovery, but new background
-launch is retired. The old `improvement-dispatch` command returns
-`background_dispatch_disabled`; it cannot silently change to a different behavior.
-Existing run files remain private local app data. Corrupt/unsupported catalogs and
-invalid outcome files are preserved, with failures surfaced rather than erased.
+The standalone Improvements Swift package owns the catalog, append-only updates,
+manual preparation state, prompt and chat links. `Modules/Improvements` is a pinned
+source snapshot with commit/hash provenance checked by `mise run validate`. Make
+shared changes in the canonical module, validate and sign a local commit, then
+update the snapshot through its vendor tool. Do not edit generated copies.
 
-## Integration evidence and boundary
+Existing schema-1 requests, UUIDs, updates, linked chats and legacy background-run
+receipts remain readable. An old unlinked automatic handoff can become a manual
+preparation while keeping its token. Legacy receipt reconciliation never restarts
+a worker. Background dispatch remains retired.
 
-On 2026-11-01, bounded synthetic tests created and completed native desktop chats,
-including one in the registered Window Factory project with the actual repository
-as cwd. A separate stdio app-server client created a conversation that the desktop
-could read/open, but it had no project association. The generated protocol schema
-exposed no project-assignment operation, and the default control-socket probe
-found no existing socket. No daemon, remote-control route or credential copying
-was introduced to bridge that gap.
-
-The owner therefore selected a visible handoff with one final Send in Codex.
-[Documented deep links](https://developers.openai.com/codex/app/commands#deep-links)
-prepare the workspace/composer and open existing chats; they do not submit the
-prompt. The app does not claim automatic native-chat creation. Callback, URL and
-persistence fixtures do not establish real product-fix acceptance. Verify one
-complete human handoff before expanding to Claude or local-model routes.
-
-## Shared module ownership
-
-The standalone `improvements` project owns the Swift package's request catalog,
-append-only updates, schema compatibility and configurable Codex handoff prompt.
-Window Factory compiles a pinned source snapshot in `Modules/Improvements` so it
-remains buildable without a sibling checkout or network access. `provenance.json`
-records the canonical source commit and hashes; `mise run validate` checks them.
-The standalone project's README defines the shared integration contract.
-
-Make shared changes in the Improvements project, validate and sign a local commit,
-then run its `scripts/vendor.py` against this app's `Modules/Improvements` directory.
-The updater refuses modified snapshots; do not patch generated files in place.
-The package also supports SwiftPM hosts through its public API.
-
-`Sources/Improvements.swift` adapts the local CLI protocol;
-`Sources/ImprovementHandoff.swift` supplies this app's name and callback command.
-Repository selection, AppKit presentation, Agent access, IPC and legacy process
-receipt reconciliation remain app-owned. Existing data paths, schema, UUIDs and
-CLI error codes are preserved. Claude and local-model routing are not implemented.
-
-Build 62 introduces this extraction. It does not establish live Space-move
-behaviour; unrelated diagnostic changes may be developed separately.
-
-## Coding-mode routing
-
-Build 65 explicitly supplies `mode=codex` alongside the selected repository path.
-The live pilot showed mode selection works, but path-only routing can retain
-the previous project. Build 66 therefore also requires an explicit saved-project
-binding; an unbound request stays saved and no composer is opened. The shared prompt now checks the coding workspace
-and saved-project membership before linking and product work. It must report a
-routing blocker rather than create another Work chat or silently work projectless.
-These desktop parameters are version-sensitive; validate after app updates with
-ChatGPT selected, one synthetic request, actual project membership and repo checks.
-
-## One-time saved-project binding
-
-Match the repository's canonical path against Codex desktop `list_projects`, then
-configure the returned saved-project ID with the same repository through
-`improvement-agent --repository PATH --codex-project ID`. This is application
-routing metadata, not an account or model identity change. Do not infer IDs from
-project names, inspect authentication state or create a new project silently.
-
-The configured `codexProjectID` is persisted beside the existing repository
-setting. Selecting the same repository preserves its binding; selecting a
-different repository clears it. Missing binding fails with `codex_project_required`
-before creating a handoff or opening a composer. Old configuration files still
-load and existing linked-chat opening/history remain available. The same source
-request and handoff can be retried after correcting setup; never restart work in
-an already-linked chat by creating another task.
-
-Build 67 matches the successful full-preview wire format exactly: routing fields
-precede the prompt and values use strict RFC 3986 encoding. The build-66 full
-handoff retained the previous project despite a valid explicit binding; a strict,
-routing-first full URL selected Window Factory in the preview. Keep live transport
-and final chat/callback assertions separate from URL fixture success. This is a
-version-sensitive integration, not a claim that URI parameter order generally
-has semantic meaning.
-
-## Acceptance result after Send
-
-The build-67 live pilot began with ChatGPT selected and displayed Codex /
-window-factory in the composer. After Send, the created coding chat still used
-the previous Improvements repository and had no confirmed saved-project membership.
-The preflight stopped before linking or product work. The external deep-link route
-therefore remains unaccepted despite successful URL fixtures and composer previews.
-
-A separate native `create_thread` control targeted the saved local Window Factory
-project and passed the actual working-directory, project-membership, link and
-outcome assertions. The synthetic request records that control result explicitly
-without claiming the external route fixed. The standalone Improvements project's
-`docs/routing-verification.md` owns the evidence and remaining integration boundary.
-Do not roll this external route into other apps until an accepted path is established.
-
-## Route diagnostics
-
-Build 68 returns `improvementRoute` with a successful new `improvement-open`
-response: running app build, decoded mode/project/repository, query-field order,
-encoded byte count and SHA-256 of the exact URL given to the opener. Prompt and
-request text are omitted. These diagnostics establish what the app sent, not
-what Codex created. Reopening an already-linked chat omits this field, avoiding a
-false new-creation result. The diagnostic is response-only and is not a catalog
-schema or saved-request migration.
+Builds 65–68 investigated an automatic deep-link route; composer previews and URL
+fixtures passed while sent chats could use the previous repository. Build 68
+confirmed the running app emitted the intended URL. The owner selected this manual
+workflow instead. The standalone module's `docs/routing-verification.md` retains
+the evidence. No shared routing chat or external desktop bridge is enabled.

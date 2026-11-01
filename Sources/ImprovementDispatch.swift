@@ -20,12 +20,13 @@ struct ImprovementRouteDiagnostic: Codable, Equatable {
     }
 }
 
-struct ImprovementAgentConfiguration: Codable {
+struct ImprovementAgentConfiguration: Codable, Equatable {
     var repository: String?
     let runner: String
     let codexProjectID: String?
-    init(repository: String? = nil, codexProjectID: String? = nil) {
-        self.repository = repository; self.codexProjectID = codexProjectID; runner = "codex-desktop"
+    let destinationRepository: String?
+    init(repository: String? = nil, codexProjectID: String? = nil, destinationRepository: String? = nil) {
+        self.repository = repository; self.codexProjectID = codexProjectID; self.destinationRepository = destinationRepository; runner = "codex-desktop"
     }
 }
 struct ImprovementWorkerStarted: Codable {let workerPID: Int32, agentPID: Int32, date: Date}
@@ -62,9 +63,19 @@ final class ImprovementDispatcher {
     let directory: URL
     var changed: (() -> Void)?
     private var timer: Timer?
+    private(set) var isCreatingProject = false
+    private var createdProjects: [UUID:String] = [:]
+    var projectInitializer: @MainActor (String) async throws -> URL = {try await ImprovementProjectCreation.create($0)}
+    let callbackCommand: String
+    var copyPrompt: (String) -> Bool = {value in
+        NSPasteboard.general.clearContents()
+        return NSPasteboard.general.setString(value,forType:.string)
+    }
     // Only old build-58 receipts need process-liveness reconciliation.
     var alive: (Int32) -> Bool = {kill($0,0) == 0 || errno == EPERM}
-    init(store: ImprovementStore, watch: Bool = true) {
+    init(store: ImprovementStore, watch: Bool = true, callbackCommand: String? = nil) {
+        let executable = Bundle.main.executableURL?.path ?? "/Applications/Window Factory.app/Contents/MacOS/WindowFactory"
+        self.callbackCommand = callbackCommand ?? ("'" + executable.replacingOccurrences(of:"'",with:"'\\''") + "' --cli")
         self.store = store; directory = store.url.deletingLastPathComponent().appendingPathComponent("improvement-runs")
         if watch, (try? store.all().contains(where:{$0.runs?.contains(where:{$0.active}) == true})) == true {
             timer = Timer.scheduledTimer(withTimeInterval:2,repeats:true) { [weak self] _ in
@@ -80,6 +91,7 @@ final class ImprovementDispatcher {
         return value
     }
     func configure(repository: String, codexProjectID: String? = nil) throws -> ImprovementAgentConfiguration {
+        guard !isCreatingProject else {throw AgentFailure("project_creation_busy", "Wait for project creation to finish.")}
         let url = try ImprovementRepository.validate(repository)
         if let codexProjectID {
             guard !codexProjectID.isEmpty, codexProjectID.utf8.count <= 256,
@@ -90,8 +102,56 @@ final class ImprovementDispatcher {
         let previous = try configuration()
         // Repository changes invalidate the old binding; selecting the same repo preserves it.
         let binding = codexProjectID ?? (previous.repository == url.path ? previous.codexProjectID : nil)
-        let value = ImprovementAgentConfiguration(repository:url.path,codexProjectID:binding)
+        let value = ImprovementAgentConfiguration(repository:url.path,codexProjectID:binding,destinationRepository:previous.destinationRepository)
         try ImprovementFiles.write(value,to:configurationURL); changed?(); return value
+    }
+    func configureDestination(_ path: String?) throws -> ImprovementAgentConfiguration {
+        guard !isCreatingProject else {throw AgentFailure("project_creation_busy", "Wait for project creation to finish.")}
+        let previous = try configuration()
+        guard previous.repository != nil else {throw AgentFailure("repository_required", "Choose the app's source project first.")}
+        let destination = try path.map {try ImprovementProjectCreation.validateDestination($0).path}
+        let value = ImprovementAgentConfiguration(repository:previous.repository,codexProjectID:previous.codexProjectID,destinationRepository:destination)
+        try ImprovementFiles.write(value,to:configurationURL); changed?(); return value
+    }
+    func createProject(_ path: String, operationID: UUID = UUID()) async throws -> ImprovementAgentConfiguration {
+        let canonical = ImprovementProjectCreation.newDestinationURL(path).path
+        if let previous = createdProjects[operationID] {
+            guard previous == canonical else {throw AgentFailure("request_conflict", "This creation ID has another destination.")}
+            return try configuration()
+        }
+        guard !isCreatingProject else {throw AgentFailure("project_creation_busy", "Wait for project creation to finish.")}
+        guard try configuration().repository != nil else {throw AgentFailure("repository_required", "Choose the app's source project first.")}
+        isCreatingProject = true; changed?()
+        do {
+            let url = try await projectInitializer(canonical)
+            isCreatingProject = false
+            let value = try configureDestination(url.path)
+            createdProjects[operationID] = url.path
+            return value
+        } catch {
+            isCreatingProject = false; changed?(); throw error
+        }
+    }
+    @discardableResult
+    func prepareRequest(_ id: UUID, operationID: UUID = UUID()) throws -> Improvement {
+        guard !isCreatingProject else {throw AgentFailure("project_creation_busy", "Wait for project creation to finish before preparing the request.")}
+        try reconcile()
+        let original = try store.get(id)
+        guard !(original.handoffs?.contains(where:{$0.threadID != nil}) ?? false) else {
+            throw AgentFailure("chat_already_linked", "Open the existing chat to continue this request.")
+        }
+        let config = try configuration()
+        guard let originPath = config.repository else {throw AgentFailure("repository_required", "Choose the app's source project first.")}
+        let origin = try ImprovementRepository.validate(originPath)
+        let destination = try ImprovementProjectCreation.validateDestination(config.destinationRepository ?? origin.path)
+        guard !(try store.all()).contains(where:{$0.runs?.contains(where:{$0.active}) == true}) else {
+            throw AgentFailure("agent_busy", "A previous run is active; finish it before preparing another request.")
+        }
+        let handoff = try store.prepareHandoff(id,handoffID:operationID,repository:destination.path,manual:true,originRepository:origin.path)
+        let application = ImprovementApplication(name:"Window Factory",callbackCommand:callbackCommand)
+        let prompt = try ImprovementHandoffLink.prompt(request:original,handoff:handoff,application:application)
+        guard copyPrompt(prompt) else {throw AgentFailure("clipboard_unavailable", "The request is saved, but copying failed. Try preparing it again.")}
+        changed?(); return try store.get(id)
     }
     func reconcile(now: Date = Date()) throws {
         for request in try store.all() {
@@ -134,21 +194,11 @@ final class ImprovementDispatcher {
             guard openURL(ImprovementHandoffLink.chatURL(threadID)) else {throw AgentFailure("codex_open_failed", "Could not open the linked Codex chat. The request is preserved.")}
             return original
         }
-        let config = try configuration()
-        guard let path = config.repository else {throw AgentFailure("repository_required", "Choose the Window Factory repository before opening Codex.")}
-        let repo = try ImprovementRepository.validate(path)
-        guard let projectID = config.codexProjectID else {
-            throw AgentFailure("codex_project_required", "The Codex project is not linked. Complete project setup before sending; your request is saved.")
-        }
-        guard !(try store.all()).contains(where:{$0.runs?.contains(where:{$0.active}) == true}) else {
-            throw AgentFailure("agent_busy", "A previous background run is still active. Finish it before opening a new request.")
-        }
-        let handoff = try store.prepareHandoff(id,handoffID:operationID,repository:repo.path)
-        let url = try ImprovementHandoffLink.newChatURL(request:original,handoff:handoff,projectID:projectID)
+        _ = try prepareRequest(id,operationID:operationID)
+        let url = ImprovementHandoffLink.manualComposerURL()
         lastPreparedRoute = ImprovementRouteDiagnostic(url:url,appBuild:store.build)
         guard openURL(url) else {
-            try store.failHandoff(id,handoffID:handoff.id)
-            throw AgentFailure("codex_open_failed", "Could not open Codex. Your request is saved; no model was started.")
+            throw AgentFailure("codex_open_failed", "Request copied. Open Codex manually, select or create the destination project, start a new chat, paste and send.")
         }
         changed?(); return try store.get(id)
     }
@@ -159,11 +209,16 @@ final class ImprovementDispatcher {
         }
         guard openURL(ImprovementHandoffLink.chatURL(threadID)) else {throw AgentFailure("codex_open_failed", "Codex could not open the linked chat.")}
     }
-    func handle(_ request: AgentRequest) throws -> AgentToolResult {
+    func handle(_ request: AgentRequest) async throws -> AgentToolResult {
         switch request.command {
         case .improvementAgent:
-            let config = try request.repository.map {try configure(repository:$0,codexProjectID:request.codexProjectID)} ?? configuration()
+            var config = try request.repository.map {try configure(repository:$0,codexProjectID:request.codexProjectID)} ?? configuration()
+            if let destination = request.destinationRepository {config = try configureDestination(destination == "app" ? nil : destination)}
             return AgentToolResult(improvementAgent:config)
+        case .improvementPrepare:
+            return AgentToolResult(improvement:try prepareRequest(request.improvementID!,operationID:request.id))
+        case .improvementCreateProject:
+            return AgentToolResult(improvementAgent:try await createProject(request.destinationRepository!,operationID:request.id))
         case .improvementDispatch:
             throw AgentFailure("background_dispatch_disabled", "Use improvement-open for a visible Codex handoff, then press Send in Codex. Background dispatch is no longer offered.")
         case .improvementOpen:
