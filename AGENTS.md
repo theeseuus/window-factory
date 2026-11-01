@@ -1,13 +1,14 @@
 # Working on Window Factory
 
-Version: 1.1
+Version: 1.2
 Updated: 2026-11-01
 
 - Read README.md and task-relevant docs before editing; inspect Git status.
 - For improvement-request work, read docs/improvements.md and use the running
-  app's CLI store API. In ordinary development sessions, check for queued requests
-  when Agent access is available; report an unavailable listener without enabling
-  access or treating unrelated requests as authorization for extra work.
+  app's CLI store API. Saved-for-later requests are not authorization to start work.
+  Work on a request only when the owner sends it or explicitly asks to pick it up.
+  The dispatcher owns outcomes for its active runs; follow its prompt and return
+  the structured result rather than changing request state yourself.
 - Keep layout/store/coordinator, app adapters, system bridge and UI responsibilities
   separate. Reviewed creation operations belong in Resources/adapters.json.
 - Use `mise run validate`, `mise run test` and the relevant build checks. Swift

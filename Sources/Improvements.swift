@@ -4,7 +4,7 @@ enum ImprovementState: String, Codable, CaseIterable {
     case queued, working, needsInput = "needs-input", implemented, declined
     var title: String {
         switch self {
-        case .queued: "Queued"
+        case .queued: "Saved for later"
         case .working: "In progress"
         case .needsInput: "Needs your input"
         case .implemented: "Implemented; awaiting build"
@@ -28,9 +28,11 @@ struct Improvement: Codable, Equatable, Identifiable {
     let build: String
     let source: String
     var updates: [ImprovementUpdate] = []
+    var runs: [ImprovementRun]? = nil
     var state: ImprovementState { updates.last?.state ?? .queued }
     var revision: Int { updates.count }
     func status(runningBuild: Int?) -> String {
+        if let run = runs?.last, run.active {return run.phase == "launching" ? "Starting agent…" : "Agent running"}
         guard state == .implemented else { return state.title }
         if let target = updates.last?.targetBuild, let runningBuild, runningBuild >= target {
             return "Available in this build"
@@ -127,6 +129,43 @@ final class ImprovementStore {
         }
         catalog.requests[index].updates.append(ImprovementUpdate(id:operationID, date:Date(), state:state, note:note, targetBuild:targetBuild))
         try save(catalog); return catalog.requests[index]
+    }
+    func beginRun(_ id: UUID, run: ImprovementRun) throws -> Improvement {
+        var catalog = try load()
+        guard let index = catalog.requests.firstIndex(where:{$0.id == id}) else {throw AgentFailure("improvement_not_found", "No improvement has that ID.")}
+        guard !catalog.requests.contains(where:{$0.runs?.contains(where:{$0.active}) == true}) else {
+            throw AgentFailure("agent_busy", "An improvement agent is already active. Wait for its result before sending another request.")
+        }
+        catalog.requests[index].runs = (catalog.requests[index].runs ?? []) + [run]
+        catalog.requests[index].updates.append(ImprovementUpdate(id:UUID(),date:Date(),state:.working,note:"Launching Codex subscription agent in the selected repository.",targetBuild:nil))
+        try save(catalog); return catalog.requests[index]
+    }
+    func markRunStarted(_ requestID: UUID, runID: UUID, sessionID: String?) throws {
+        var catalog = try load()
+        guard let index = catalog.requests.firstIndex(where:{$0.id == requestID}),
+              let runIndex = catalog.requests[index].runs?.firstIndex(where:{$0.id == runID}),
+              catalog.requests[index].runs?[runIndex].active == true else {return}
+        if catalog.requests[index].runs?[runIndex].phase == "running",
+           catalog.requests[index].runs?[runIndex].sessionID == sessionID {return}
+        catalog.requests[index].runs![runIndex].phase = "running"
+        catalog.requests[index].runs![runIndex].sessionID = sessionID
+        try save(catalog)
+    }
+    func finishRun(_ requestID: UUID, runID: UUID, receipt: ImprovementWorkerReceipt) throws {
+        var catalog = try load()
+        guard let index = catalog.requests.firstIndex(where:{$0.id == requestID}),
+              let runIndex = catalog.requests[index].runs?.firstIndex(where:{$0.id == runID}),
+              catalog.requests[index].runs?[runIndex].active == true else {return}
+        let startRevision = catalog.requests[index].runs![runIndex].revision
+        catalog.requests[index].runs![runIndex].finishedAt = receipt.finishedAt
+        catalog.requests[index].runs![runIndex].sessionID = receipt.sessionID
+        catalog.requests[index].runs![runIndex].phase = receipt.succeeded ? "finished" : "failed"
+        let changedMeanwhile = catalog.requests[index].revision != startRevision + 1
+        let state = changedMeanwhile ? catalog.requests[index].state : receipt.result.state
+        let target = changedMeanwhile ? catalog.requests[index].updates.last?.targetBuild : receipt.result.targetBuild
+        let note = (changedMeanwhile ? "Agent finished after the request was updated; current status retained.\n" : "") + receipt.result.note
+        catalog.requests[index].updates.append(ImprovementUpdate(id:UUID(),date:receipt.finishedAt,state:state,note:note,targetBuild:target))
+        try save(catalog)
     }
     func handle(_ request: AgentRequest) throws -> AgentToolResult {
         switch request.command {

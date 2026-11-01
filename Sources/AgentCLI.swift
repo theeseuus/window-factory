@@ -5,6 +5,8 @@ enum AgentCLI {
     static let help = """
     Window Factory CLI (JSON; running app and Agent access required)
       window-factory status | capabilities | layouts | apps | tiling-status | layout-export
+      window-factory improvement-agent [--repository PATH]
+      window-factory improvement-dispatch --improvement UUID
       window-factory improvements [--improvement UUID | --offset N]
       window-factory improvement-submit --text TEXT [--context TEXT] [--request-id UUID]
       window-factory improvement-update --improvement UUID --revision N --state STATE --note TEXT [--target-build N]
@@ -28,7 +30,7 @@ enum AgentCLI {
       window-factory layout-import --input CATALOG.json --display ID --space ID [--wait]
       window-factory job|cancel --job UUID [--wait]
     Options: --request-id UUID, --instance UUID, --wait-seconds 1...300
-    Mutations require the current display/Space IDs from status. Reuse a request ID
+    Desktop mutations require the current display/Space IDs from status. Reuse a request ID
     only for the identical request. Accepted jobs are not completed operations.
     Agent access and permission grants remain controlled in Settings.
     """
@@ -44,6 +46,7 @@ enum AgentCLI {
             guard index<args.count else {throw AgentFailure("invalid_arguments","Missing value for \(flag).")}
             let value=args[index];index+=1
             switch flag {
+            case "--repository":request.repository=value
             case "--text":request.text=value
             case "--context":request.context=value
             case "--state":request.state=value

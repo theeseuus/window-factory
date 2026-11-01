@@ -1,11 +1,11 @@
 # Window Factory CLI
 
-Version: 1.3
+Version: 1.4
 Updated: 2026-11-01
 
 `scripts/window-factory` (or the installed binary with `--cli`) provides JSON access to the running app's layout, application, tiling and direct window operations.
 It does not open Window Factory’s library, confirmation panels or Settings,
-activate Window Factory, register shortcuts, launch a second app instance or grant
+activate Window Factory, register shortcuts, start a second window-controller instance or grant
 permissions. Establish can open the requested target-app windows; macOS may still
 request an adapter’s Automation permission if it has not already been granted.
 Window operations still need
@@ -219,13 +219,15 @@ because its first stage may already have completed.
 
 ## Improvement requests
 
-These commands share the UI's durable request store, use normal Agent access,
-and do not require Accessibility, desktop context, an idle window-operation job
-or `--wait`. They return immediately in `result.tools` and never execute a request.
-All three are advertised by `capabilities`.
+These commands share the UI's durable request store and dispatcher, use normal
+Agent access, and do not require Accessibility, desktop context, an idle
+window-operation job or `--wait`. They return immediately in `result.tools`.
+Only `improvement-dispatch` launches an agent. All are advertised by `capabilities`.
 
 | Command | Result |
 | --- | --- |
+| `improvement-agent [--repository PATH]` | `improvementAgent`: selected repository and fixed `codex-ai` runner. Supplying an absolute path validates and saves the app-owned repository binding. |
+| `improvement-dispatch --improvement UUID` | Saves a run for that existing request and starts a background agent in its configured repository; returns the updated `improvement`. |
 | `improvements [--offset N]` | `improvements`: up to 100 summaries, oldest first; `improvementCount`: total. Continue with offsets 100, 200, etc. Each summary includes ID, excerpt, state, revision and running-build status. |
 | `improvements --improvement UUID` | `improvement`: full original text, context, source version/build, creation date and append-only updates |
 | `improvement-submit --text TEXT [--context TEXT]` | Saves a queued request; its stable ID is the invocation's `--request-id` (generated if omitted) |
@@ -251,3 +253,23 @@ Availability is derived from the running app build and the latest implemented
 update's target build. A local commit alone does not establish availability.
 See [the pilot workflow](docs/improvements.md) for handling requests and evaluating
 whether the pattern should become a reusable standard.
+
+
+Dispatch is explicit; submission alone remains saved for later. Its run ID is the
+invocation's request ID. Reusing the same `--request-id` for the same request
+returns the recorded run outcome without relaunching, including after failure;
+an intentional retry uses a fresh request ID. Reuse for another request is rejected.
+ Each full request
+may now include `runs`, an optional backwards-compatible array recording ID,
+repository, start/finish times, source revision, phase and session ID. Existing
+records without `runs` remain readable. `queued` is displayed as Saved for later;
+active runs distinguish Starting agent from Agent running. Phase/result receipts
+are reconciled on queries and by the running app. No command waits for model work.
+
+Dispatch errors include `repository_required`, `invalid_repository`,
+`repository_dirty`, `repository_check_failed`, `unsupported_runner`, `agent_busy`,
+`request_finished` and `agent_launch_failed`. A failed dispatch never discards a
+saved request. No automatic retry occurs. The worker uses the selected repository,
+existing subscription wrapper, configured default model and normal policy; it
+returns its result through private files even if the UI app exits. See the pilot
+workflow for execution, timeout, failure and installation boundaries.

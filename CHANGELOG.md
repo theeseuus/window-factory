@@ -1,5 +1,28 @@
 # Source baseline
 
+## 2026-11-01 — explicit save or immediate agent dispatch, build 58
+
+Replaces the ambiguous Send request action with Save for later and Send to agent
+now. Saved requests can also be sent later. The owner-selected codex-ai subscription
+runner starts in the configured Window Factory repository with its default model,
+normal instructions, sandbox and approval review. The app tracks starting/running
+state and reconciles structured results automatically, including across app restarts.
+
+A dirty repository, active agent, failed launch or interrupted worker leaves the
+request saved with an honest outcome; the backlog is never dispatched automatically.
+The worker verifies a new clean signed local commit before accepting implementation.
+Installation/publication remain owner actions. Request storage and the Codex adapter
+are separate owners for later Claude/local backend work. Build 55's Space-move
+implementation remains unchanged.
+
+Source validation, the full native suite (37 request and 35 dispatch assertions)
+and the signed build passed. Native button tests distinguish Save, Send now and
+Send selected; lifecycle checks cover retries, interruption and invalid outcomes.
+A real codex-ai launch returned a session ID and structured receipt using only a
+generated synthetic repository, including a minimal GUI-style PATH. No saved
+product request was dispatched by validation. Real feature implementation through
+the new route remains for owner acceptance.
+
 ## 2026-11-01 — improvement-request pilot, build 57
 
 Adds Improve this app in the application and menu-bar menus, with a quick request

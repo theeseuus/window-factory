@@ -67,7 +67,7 @@ enum ImprovementTests {
         func descendants(_ view: NSView) -> [NSView] {view.subviews.flatMap {[$0] + descendants($0)}}
         let views = descendants(ui.window.contentView!)
         let input = views.compactMap {$0 as? NSTextView}.first {$0.isEditable}!
-        let send = views.compactMap {$0 as? NSButton}.first {$0.title == "Send request"}!
+        let send = views.compactMap {$0 as? NSButton}.first {$0.title == "Save for later"}!
         input.string = "Show a clearer explanation when a window cannot move."
         send.performClick(nil)
         check(try previewStore.all().count == 2 && input.string.isEmpty,"form submission saves and clears only after success")

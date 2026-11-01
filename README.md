@@ -1,6 +1,6 @@
 # Window Factory
 
-Version: 1.2
+Version: 1.3
 Updated: 2026-11-01
 
 <img src="Resources/WindowFactory.icon/Assets/WindowFactory.png" width="128" alt="Window Factory sculpted blue app icon">
@@ -19,7 +19,8 @@ Spaces. Built with Swift, AppKit and a small Objective-C system bridge.
   windows and restore their previous positions.
 - Configure app-launch shortcuts and search applications separately from layouts.
 - Use an optional same-user JSON CLI through the running app.
-- Request improvements in the app and see their context and outcomes locally.
+- Save improvements for later or send them to a Codex subscription agent in the
+  source repository, with context and outcomes tracked locally.
 
 ## Getting started
 

@@ -2,6 +2,7 @@ import AppKit
 
 @MainActor
 final class FactoryApp: NSObject, NSApplicationDelegate {
+    var improvementDispatcher: ImprovementDispatcher?
     var improvements: ImprovementsWindow?
     var systemCommands: SystemCommands?
     var tilingShortcut: OptionalCommandShortcut?
@@ -58,7 +59,8 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
             let improvementStore = ImprovementStore(url:URL(fileURLWithPath:directory).appendingPathComponent("improvements.json"),
                 version:Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development",
                 build:Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development")
-            improvements = ImprovementsWindow(store:improvementStore)
+            let dispatcher = ImprovementDispatcher(store:improvementStore); improvementDispatcher = dispatcher
+            improvements = ImprovementsWindow(store:improvementStore,dispatcher:dispatcher)
             let preferences = FactoryPreferences()
             let bindings = preview ? nil : KeybindingManager(store:preferences.shortcuts)
             keybindings = bindings
@@ -167,7 +169,7 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
                 spaceIndicator?.newCodexChord = { [weak creationKey] in creationKey?.chord }
                 spaceIndicator?.newCodexAvailable = { [weak creator] in creator?.available("com.openai.codex") == true }
                 let service=AgentService(preferences:preferences,library:library);agent=service;settings?.agent=service
-                service.improvementOperation = { try improvementStore.handle($0) }
+                service.improvementOperation = { try dispatcher.handle($0) }
                 service.extraBusy = { [weak self] in self?.geometry?.isBusy == true || self?.focus?.isBusy == true || self?.stash?.isBusy == true || self?.accordion?.isBusy == true || self?.spaceMove?.isMoving == true || self?.switcher?.isOpen == true || self?.tiling?.controller.isBusy == true || self?.newWindow?.isBusy == true || self?.applications?.isLaunching == true || self?.systemCommands?.isBusy == true }
                 let tools=AgentTools(library:library,apps:appLauncher,creation:creator,tiling:feature.controller);agentTools=tools
                 let direct=AgentDirectWindows(geometry:geometry!,stash:stash!,move:spaceMove!,accordion:accordion!);agentWindows=direct
@@ -303,12 +305,16 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
         library?.show();return true
     }
     func applicationDidBecomeActive(_ notification: Notification) { library?.updateButtons(); launcher?.refreshLoginState(); settings?.refresh() }
-    func applicationWillTerminate(_ notification: Notification) { systemCommands?.stop(); tilingShortcut?.stop();newWindowShortcut?.stop();newWindow?.stop();newWindowHUD.stop();tiling?.stop();applications?.stop();applicationSearch?.stop();agent?.stop(); launcher?.stop(); spaceIndicator?.stop(); spaceMove?.stop(); accordion?.stop(); switcher?.stop(); stash?.stop(); shortcutReference?.stop(); focus?.stop(); geometry?.stop(); library?.stop(); settings?.stop() }
+    func applicationWillTerminate(_ notification: Notification) { improvementDispatcher?.stop(); systemCommands?.stop(); tilingShortcut?.stop();newWindowShortcut?.stop();newWindow?.stop();newWindowHUD.stop();tiling?.stop();applications?.stop();applicationSearch?.stop();agent?.stop(); launcher?.stop(); spaceIndicator?.stop(); spaceMove?.stop(); accordion?.stop(); switcher?.stop(); stash?.stop(); shortcutReference?.stop(); focus?.stop(); geometry?.stop(); library?.stop(); settings?.stop() }
 }
 
 @main
 enum FactoryMain {
     @MainActor static func main() {
+        if CommandLine.arguments.dropFirst().first == "--improvement-worker" {
+            guard CommandLine.arguments.count == 3 else {exit(2)}
+            exit(ImprovementWorker.run(CommandLine.arguments[2]))
+        }
         if CommandLine.arguments.dropFirst().first == "--cli" { AgentCLI.run(Array(CommandLine.arguments.dropFirst(2))) }
         if let index = CommandLine.arguments.firstIndex(of:"--validate-catalog") {
             do {
