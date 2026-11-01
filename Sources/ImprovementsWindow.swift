@@ -4,6 +4,7 @@ import AppKit
 final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDelegate {
     let window: NSWindow
     let store: ImprovementStore
+    private let preferences: FactoryPreferences
     private let dispatcher: ImprovementDispatcher?
     private let agentLabel = NSTextField(wrappingLabelWithString:"")
     private let openChatButton = NSButton(title:"Open chat",target:nil,action:nil)
@@ -16,7 +17,8 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
     private let copyButton = NSButton(title:"Copy selected request for agent", target:nil, action:nil)
     private var rows: [Improvement] = []
     private var draftID = UUID()
-    init(store: ImprovementStore, dispatcher: ImprovementDispatcher? = nil) {
+    init(store: ImprovementStore, preferences: FactoryPreferences, dispatcher: ImprovementDispatcher? = nil) {
+        self.preferences = preferences
         self.store = store; self.dispatcher = dispatcher
         window = NSWindow(contentRect:NSRect(x:0,y:0,width:780,height:840), styleMask:[.titled,.closable,.resizable], backing:.buffered, defer:false)
         super.init()
@@ -81,7 +83,9 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         text.autoresizingMask = [.width]; text.textContainer?.widthTracksTextView = true
         scroll.documentView = text; return scroll
     }
+    func applyPreferences() { window.level = preferences.keepLibraryOnTop ? .floating : .normal }
     func show(context: String) {
+        applyPreferences()
         // Preserve an unfinished draft and the context from when it was started.
         if input.string.isEmpty { contextField.stringValue = context }
         refreshHistory(); window.center(); window.makeKeyAndOrderFront(nil)

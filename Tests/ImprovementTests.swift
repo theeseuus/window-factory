@@ -63,7 +63,10 @@ enum ImprovementTests {
         let previewStore = ImprovementStore(url:root.appendingPathComponent("preview/requests.json"),version:"0.2.0",build:"57")
         let sample = try previewStore.submit(text:"Keep my place in the list when I return from a layout.",context:"Layout library",source:"ui")
         _ = try previewStore.update(sample.id,operationID:UUID(),revision:0,state:.implemented,note:"Selection and scroll position now survive returning to the library. Fixture regression passed.",targetBuild:58)
-        let ui = ImprovementsWindow(store:previewStore)
+        let presentationSuite = "WindowFactory.ImprovementPresentationTest.\(UUID().uuidString)"
+        let presentationDefaults = UserDefaults(suiteName:presentationSuite)!
+        defer { presentationDefaults.removePersistentDomain(forName:presentationSuite) }
+        let ui = ImprovementsWindow(store:previewStore,preferences:FactoryPreferences(defaults:presentationDefaults))
         func descendants(_ view: NSView) -> [NSView] {view.subviews.flatMap {[$0] + descendants($0)}}
         let views = descendants(ui.window.contentView!)
         let input = views.compactMap {$0 as? NSTextView}.first {$0.isEditable}!

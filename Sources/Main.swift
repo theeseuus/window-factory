@@ -60,8 +60,8 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
                 version:Bundle.main.object(forInfoDictionaryKey:"CFBundleShortVersionString") as? String ?? "development",
                 build:Bundle.main.object(forInfoDictionaryKey:"CFBundleVersion") as? String ?? "development")
             let dispatcher = ImprovementDispatcher(store:improvementStore); improvementDispatcher = dispatcher
-            improvements = ImprovementsWindow(store:improvementStore,dispatcher:dispatcher)
             let preferences = FactoryPreferences()
+            improvements = ImprovementsWindow(store:improvementStore,preferences:preferences,dispatcher:dispatcher)
             let bindings = preview ? nil : KeybindingManager(store:preferences.shortcuts)
             keybindings = bindings
             let appLauncher = ApplicationLauncher(shortcuts:preferences.shortcuts,live:!preview);applications=appLauncher
@@ -91,7 +91,7 @@ final class FactoryApp: NSObject, NSApplicationDelegate {
             library?.onSettings = { [weak self] in self?.showSettings(nil) }
             settings?.changed = { [weak self] in self?.library?.applyPreferences() }
             if !preview {
-                let search = ApplicationsWindow(launcher:appLauncher);applicationSearch=search
+                let search = ApplicationsWindow(launcher:appLauncher,preferences:preferences);applicationSearch=search
                 appLauncher.searchRequested = { [weak self] in self?.toggleApplications() }
                 appLauncher.launchFailed = { [weak search] in search?.showError($0) }
                 appLauncher.blocked = { [weak self] in self?.library?.task != nil || self?.library?.frozen != nil || NSApp.modalWindow != nil }

@@ -23,9 +23,11 @@ final class ApplicationsWindow: NSObject,NSTableViewDataSource,NSTableViewDelega
     let window: NSWindow
     let search=NSSearchField(),table=NSTableView()
     private let launcher: ApplicationLauncher
+    private let preferences: FactoryPreferences
     private var apps: [ApplicationEntry]=[],filtered: [ApplicationEntry]=[]
     private var monitor: Any?
-    init(launcher: ApplicationLauncher) {
+    init(launcher: ApplicationLauncher, preferences: FactoryPreferences) {
+        self.preferences=preferences
         self.launcher=launcher
         window=NSWindow(contentRect:NSRect(x:0,y:0,width:560,height:420),styleMask:[.titled,.closable,.resizable],backing:.buffered,defer:false)
         super.init();window.title="Window Factory Applications";window.isReleasedWhenClosed=false;window.collectionBehavior=[.moveToActiveSpace];window.delegate=self
@@ -65,7 +67,8 @@ final class ApplicationsWindow: NSObject,NSTableViewDataSource,NSTableViewDelega
         return found.values.sorted{$0.name.localizedStandardCompare($1.name) == .orderedAscending}
     }
     func reload(){let query=search.stringValue.trimmingCharacters(in:.whitespacesAndNewlines);filtered=apps.filter{query.isEmpty || $0.name.localizedCaseInsensitiveContains(query)};table.reloadData();if !filtered.isEmpty{table.selectRowIndexes(IndexSet(integer:0),byExtendingSelection:false)}}
-    func show(){apps=Self.inventory(extra:launcher.entries);search.stringValue="";reload();window.center();window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true);window.makeFirstResponder(search)}
+    func applyPreferences() { window.level = preferences.keepLibraryOnTop ? .floating : .normal }
+    func show(){applyPreferences();apps=Self.inventory(extra:launcher.entries);search.stringValue="";reload();window.center();window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true);window.makeFirstResponder(search)}
     func controlTextDidChange(_ obj: Notification){reload()}
     func numberOfRows(in tableView: NSTableView)->Int{filtered.count}
     func tableView(_ tableView: NSTableView,viewFor column: NSTableColumn?,row: Int)->NSView? {

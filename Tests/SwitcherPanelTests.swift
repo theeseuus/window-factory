@@ -321,6 +321,17 @@ import AppKit
         try PropertyListSerialization.data(fromPropertyList:appInfo,format:.xml,options:0).write(to:appURL.appendingPathComponent("Contents/Info.plist"))
         let appKeys = KeybindingStore(defaults:appDefaults)
         let apps = ApplicationLauncher(defaults:appDefaults,shortcuts:appKeys,live:false)
+        let applicationUI = ApplicationsWindow(launcher:apps,preferences:dockPreferences)
+        defer { applicationUI.stop() }
+        let improvementUI = ImprovementsWindow(store:ImprovementStore(url:appRoot.appendingPathComponent("improvements.json"),version:"test",build:"64"),preferences:dockPreferences)
+        for floating in [false,true,false] {
+            dockPreferences.keepLibraryOnTop = floating
+            layoutUI.applyPreferences(); applicationUI.applyPreferences(); improvementUI.applyPreferences()
+            let expected: NSWindow.Level = floating ? .floating : .normal
+            check(layoutUI.window.level == expected,"picker follows keep-on-top preference")
+            check(applicationUI.window.level == layoutUI.window.level,"Applications can order in front of the picker at either level")
+            check(improvementUI.window.level == layoutUI.window.level,"Improve Window Factory can order in front of the picker at either level")
+        }
         check(apps.entries.count == 1 && apps.entries[0].isSearch && !apps.entries[0].enabled,"new Applications search command starts unassigned and disabled")
         let fixtureID = try apps.add(appURL)
         check(try apps.add(appURL) == fixtureID && apps.entries.count == 2,"app picker identity deduplicates by bundle ID")

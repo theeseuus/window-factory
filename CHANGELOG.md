@@ -1,5 +1,21 @@
 # Source baseline
 
+## 2026-11-01 — present requested windows above the picker, build 64
+
+Applications and Improve Window Factory now read the same keep-on-top preference
+as the layout library when opened. A floating picker previously obscured these
+normal-level windows even after their make-key-and-order-front request. Matching
+the library's level lets the requested window come forward, consistent with
+Settings and Keyboard Shortcuts. Reopening also restores normal level after the
+preference is disabled.
+
+AppKit regressions check the library and both requested windows with keep-on-top
+off, on and off again, using isolated preferences and no displayed windows.
+Source validation, the full native suite (including 410 panel assertions) and an
+explicitly ad hoc signed build 64 passed; the bundle signature was verified.
+Live window ordering still needs an owner check after installation; this change
+does not claim that desktop acceptance from fixture results.
+
 ## 2026-11-01 — precise Space-move eligibility diagnostics, build 63
 
 A captured build-60 Rex move reached destination membership and dispatched follow,

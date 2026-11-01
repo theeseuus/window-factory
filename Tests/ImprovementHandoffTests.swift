@@ -86,7 +86,10 @@ enum ImprovementHandoffTests {
         let uiDispatcher = ImprovementDispatcher(store:uiStore,watch:false)
         _ = try uiDispatcher.configure(repository:repo.path)
         var uiURLs: [URL] = []; uiDispatcher.openURL = {uiURLs.append($0); return true}
-        let ui = ImprovementsWindow(store:uiStore,dispatcher:uiDispatcher)
+        let presentationSuite = "WindowFactory.ImprovementPresentationTest.\(UUID().uuidString)"
+        let presentationDefaults = UserDefaults(suiteName:presentationSuite)!
+        defer { presentationDefaults.removePersistentDomain(forName:presentationSuite) }
+        let ui = ImprovementsWindow(store:uiStore,preferences:FactoryPreferences(defaults:presentationDefaults),dispatcher:uiDispatcher)
         func descendants(_ view: NSView) -> [NSView] {view.subviews.flatMap {[$0] + descendants($0)}}
         let views = descendants(ui.window.contentView!), buttons = views.compactMap {$0 as? NSButton}
         let input = views.compactMap {$0 as? NSTextView}.first {$0.isEditable}!
