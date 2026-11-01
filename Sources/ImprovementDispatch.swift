@@ -1,5 +1,24 @@
 import AppKit
 import Darwin
+import CryptoKit
+
+// Reports the actual generated route without exposing the request/prompt text.
+struct ImprovementRouteDiagnostic: Codable, Equatable {
+    let appBuild: String, mode: String?, projectID: String?, repository: String?
+    let queryOrder: [String], urlSHA256: String
+    let encodedBytes: Int
+    init(url: URL, appBuild: String) {
+        let items = URLComponents(url:url,resolvingAgainstBaseURL:false)?.queryItems ?? []
+        self.appBuild = appBuild
+        mode = items.first(where:{$0.name == "mode"})?.value
+        projectID = items.first(where:{$0.name == "projectId"})?.value
+        repository = items.first(where:{$0.name == "path"})?.value
+        queryOrder = items.map(\.name)
+        let data = Data(url.absoluteString.utf8)
+        encodedBytes = data.count
+        urlSHA256 = SHA256.hash(data:data).map {String(format:"%02x",$0)}.joined()
+    }
+}
 
 struct ImprovementAgentConfiguration: Codable {
     var repository: String?
@@ -104,9 +123,11 @@ final class ImprovementDispatcher {
             }
         }
     }
+    private(set) var lastPreparedRoute: ImprovementRouteDiagnostic?
     var openURL: (URL) -> Bool = {NSWorkspace.shared.open($0)}
     @discardableResult
     func openRequest(_ id: UUID, operationID: UUID = UUID()) throws -> Improvement {
+        lastPreparedRoute = nil
         try reconcile()
         let original = try store.get(id)
         if let chat = original.handoffs?.last(where:{$0.threadID != nil}), let threadID = chat.threadID {
@@ -124,6 +145,7 @@ final class ImprovementDispatcher {
         }
         let handoff = try store.prepareHandoff(id,handoffID:operationID,repository:repo.path)
         let url = try ImprovementHandoffLink.newChatURL(request:original,handoff:handoff,projectID:projectID)
+        lastPreparedRoute = ImprovementRouteDiagnostic(url:url,appBuild:store.build)
         guard openURL(url) else {
             try store.failHandoff(id,handoffID:handoff.id)
             throw AgentFailure("codex_open_failed", "Could not open Codex. Your request is saved; no model was started.")
@@ -145,7 +167,8 @@ final class ImprovementDispatcher {
         case .improvementDispatch:
             throw AgentFailure("background_dispatch_disabled", "Use improvement-open for a visible Codex handoff, then press Send in Codex. Background dispatch is no longer offered.")
         case .improvementOpen:
-            return AgentToolResult(improvement:try openRequest(request.improvementID!,operationID:request.id))
+            let value = try openRequest(request.improvementID!,operationID:request.id)
+            return AgentToolResult(improvementRoute:lastPreparedRoute,improvement:value)
         case .improvementLink:
             return AgentToolResult(improvement:try store.linkChat(request.improvementID!,handoffID:request.handoffID!,threadID:request.threadID!))
         default:

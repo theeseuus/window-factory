@@ -1,6 +1,6 @@
 # Improvement requests — Window Factory pilot
 
-Version: 1.8
+Version: 1.9
 Updated: 2026-11-01
 
 ## Two connected places
@@ -214,3 +214,13 @@ outcome assertions. The synthetic request records that control result explicitly
 without claiming the external route fixed. The standalone Improvements project's
 `docs/routing-verification.md` owns the evidence and remaining integration boundary.
 Do not roll this external route into other apps until an accepted path is established.
+
+## Route diagnostics
+
+Build 68 returns `improvementRoute` with a successful new `improvement-open`
+response: running app build, decoded mode/project/repository, query-field order,
+encoded byte count and SHA-256 of the exact URL given to the opener. Prompt and
+request text are omitted. These diagnostics establish what the app sent, not
+what Codex created. Reopening an already-linked chat omits this field, avoiding a
+false new-creation result. The diagnostic is response-only and is not a catalog
+schema or saved-request migration.

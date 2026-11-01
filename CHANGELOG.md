@@ -1,5 +1,13 @@
 # Source baseline
 
+## 2026-11-01 — inspect the running handoff route, build 68
+
+Return non-content route diagnostics for new handoffs: running build, destination
+fields, query order, encoded size and exact URL digest. Reopening an existing chat
+omits new-route diagnostics. This isolates the app-generated URL from desktop
+composer and execution-context behavior; it does not claim routing acceptance.
+
+
 ## 2026-11-01 — verified desktop URL representation, build 67
 
 Emit routing fields before the prompt and use strict RFC 3986 component encoding,

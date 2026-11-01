@@ -339,6 +339,7 @@ struct AgentTiling: Codable {
 struct AgentToolResult: Codable {
   var apps: [AgentApp]?, tiling: AgentTiling?, catalog: Catalog?, names: [String]?
   var improvementAgent: ImprovementAgentConfiguration?
+  var improvementRoute: ImprovementRouteDiagnostic?
   var improvement: Improvement?, improvements: [ImprovementSummary]?, improvementCount: Int?
   var display: UInt32?, space: UInt64?
   var windowID: UInt32?, pid: Int32?, frame: Frame?, message: String?

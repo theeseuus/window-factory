@@ -1,6 +1,6 @@
 # Window Factory CLI
 
-Version: 1.8
+Version: 1.9
 Updated: 2026-11-01
 
 `scripts/window-factory` (or the installed binary with `--cli`) provides JSON access to the running app's layout, application, tiling and direct window operations.
@@ -308,3 +308,9 @@ the same repository and clears it for a changed repository. New handoffs require
 the binding (`codex_project_required` if missing); this command does not change
 credentials, macOS permissions or the selected model. Use normal local IPC approval
 review for a sandbox-denied setup call; never edit the app's data files directly.
+
+Build 68 adds optional `result.tools.improvementRoute` to successful new
+`improvement-open` responses. It reports actual running build, mode, project ID,
+repository, query order, encoded size and URL SHA-256, omitting request text.
+An already-linked chat reopen omits it. These fields diagnose app output and do
+not prove the receiving desktop created the requested execution context.

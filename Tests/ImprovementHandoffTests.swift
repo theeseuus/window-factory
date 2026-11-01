@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 
 @MainActor
 enum ImprovementHandoffTests {
@@ -43,6 +44,11 @@ enum ImprovementHandoffTests {
         check(!opened[0].absoluteString.contains("+"),"literal plus signs are safe for both URLComponents and form-style query decoders")
         check(query["prompt"]!.contains("A & B + C?") && query["prompt"]!.contains("$(do not execute) 😀"),"request remains data and survives URL encoding")
         check(query["prompt"]!.contains(handoff.id.uuidString) && query["prompt"]!.contains("CODEX_THREAD_ID") && query["prompt"]!.contains("improvement-link"),"prepared prompt carries stable callback IDs and current-chat discovery")
+        let route = dispatcher.lastPreparedRoute!
+        check(route.mode == "codex" && route.projectID == "fixture-project" && route.repository == repo.resolvingSymlinksInPath().path && route.appBuild == "59","route diagnostics describe actual builder arguments and running app build")
+        let expectedHash = SHA256.hash(data:Data(opened[0].absoluteString.utf8)).map {String(format:"%02x",$0)}.joined()
+        check(route.urlSHA256 == expectedHash && route.encodedBytes == opened[0].absoluteString.utf8.count,"route digest identifies the exact URL supplied to the opener")
+        check(!String(decoding:try JSONEncoder().encode(route),as:UTF8.self).contains("do not execute"),"route diagnostics omit prompt/request contents")
         let prompt = query["prompt"]!
         let retryPosition = prompt.range(of:"request normal tool approval/escalation")!.lowerBound
         let stopPosition = prompt.range(of:"If review is rejected")!.lowerBound
@@ -62,6 +68,7 @@ enum ImprovementHandoffTests {
         let countBeforeOpen = opened.count
         _ = try dispatcher.openRequest(first.id)
         check(opened.count == countBeforeOpen + 1 && opened.last == ImprovementHandoffLink.chatURL(chat),"linked request opens existing chat rather than another task")
+        check(dispatcher.lastPreparedRoute == nil,"reopening a linked chat cannot report stale new-chat diagnostics")
         let reopened = ImprovementStore(url:store.url,version:"test",build:"60")
         check(try reopened.get(first.id).handoffs?.last?.threadID == chat,"chat association survives app restart")
         let second = try store.submit(text:"Second request",context:"",source:"ui")
@@ -87,6 +94,9 @@ enum ImprovementHandoffTests {
         check(configurationReply.result?.tools?.improvementAgent?.codexProjectID == "fixture-project","CLI config roundtrip retains the explicit project binding")
         let background = try await call(["improvement-dispatch","--improvement",second.id.uuidString])
         check(background.code == "background_dispatch_disabled","old command cannot silently launch a headless model")
+        dispatcher.openURL = {opened.append($0); return true}
+        let routeReply = try await call(["improvement-open","--improvement",second.id.uuidString])
+        check(routeReply.result?.tools?.improvementRoute?.projectID == "fixture-project","CLI returns the actual new-chat route diagnostics")
         let linkReply = try await call(["improvement-link","--improvement",second.id.uuidString,"--handoff",secondHandoff.id.uuidString,"--thread",UUID().uuidString])
         check(linkReply.ok && linkReply.result?.tools?.improvement?.handoffs?.last?.threadID != nil,"CLI callback links the actual chat through the shared store")
         let outcome = try await call(["improvement-update","--improvement",second.id.uuidString,"--revision","1","--state","implemented","--note","Fixture change verified and committed", "--target-build","60"])
