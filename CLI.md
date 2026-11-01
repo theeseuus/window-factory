@@ -1,6 +1,6 @@
 # Window Factory CLI
 
-Version: 1.6
+Version: 1.7
 Updated: 2026-11-01
 
 `scripts/window-factory` (or the installed binary with `--cli`) provides JSON access to the running app's layout, application, tiling and direct window operations.
@@ -200,6 +200,19 @@ classification and autorepeat, plus `unattributedKeyboardDelta`. PID zero or a
 source-state value alone does not identify physical hardware or prove which
 remapper generated an event. Resolve a live nonzero PID separately if needed.
 No key codes, typed characters or modifier values are retained.
+
+Report schema 3 adds optional `eligibilityFailure` for a `window_eligibility`
+stop. Its `check` identifies the first failed condition: `workspaceAvailable`,
+`appIdentity`, `appVisible`, `windowIdentity`, `standardWindow`, `notMinimized`
+or `notFullscreen`. Native window-ID and AX attribute reads include `axStatus`;
+the ID read also includes `observedWindowID`, and boolean reads include
+`observedBool` when available. A failed subrole read is distinguishable from a
+successful read that reports a nonstandard window. No raw subrole strings or
+extra desktop inventory are retained. Checks keep their existing order and stop
+at the first failure; the report does not resample or relax a failed guard.
+Optional minimized/fullscreen attributes retain the existing behavior when
+unavailable. This evidence identifies the stopping condition, not necessarily
+its underlying cause. Older reports cannot reveal that condition retroactively.
 
 A listen-only event tap exists only during each move, then is removed. It neither
 consumes nor synthesizes input. Pointer presses and observed non-move keys still

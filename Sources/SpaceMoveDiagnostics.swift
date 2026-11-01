@@ -1,7 +1,7 @@
 import Foundation
 
 struct SpaceMoveDiagnosticReport: Codable, Equatable {
-    var schemaVersion = 2
+    var schemaVersion = 3
     var attemptID = UUID()
     var startedAt = Date()
     var macOS = ProcessInfo.processInfo.operatingSystemVersionString
@@ -40,7 +40,32 @@ struct SpaceMoveDiagnosticReport: Codable, Equatable {
     var focusMainStatus: Int32?
     var focusRaiseStatus: Int32?
     var failedCheck: String?
+    var eligibilityFailure: SpaceMoveEligibilityObservation?
     var detail: String?
+}
+
+enum SpaceMoveEligibilityCheck: String, Codable, CaseIterable {
+    case workspaceAvailable, appIdentity, appVisible, windowIdentity, standardWindow, notMinimized, notFullscreen
+}
+
+struct SpaceMoveEligibilityObservation: Codable, Equatable {
+    var check: SpaceMoveEligibilityCheck
+    var passed: Bool
+    var axStatus: Int32?
+    var observedWindowID: UInt32?
+    var observedBool: Bool?
+}
+
+enum SpaceMoveEligibility {
+    // Preserve the original guard's ordering and short circuit: do not query
+    // later conditions, retry AX reads, or relax eligibility after a failure.
+    static func firstFailure(read: (SpaceMoveEligibilityCheck) -> SpaceMoveEligibilityObservation) -> SpaceMoveEligibilityObservation? {
+        for check in SpaceMoveEligibilityCheck.allCases {
+            let observation=read(check)
+            if !observation.passed { return observation }
+        }
+        return nil
+    }
 }
 
 // One in-memory report, piggybacking on reads the controller already makes.

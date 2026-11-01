@@ -119,13 +119,36 @@ final class DirectSpaceMoveControls {
                             diagnostic.report.failedCheck=pointerChanged ? "pointer_input" : "keyboard_input"
                             throw FactoryError("New keyboard or pointer input; Space command stopped.")
                         }
-                        guard (!workspaceBusy() || agentRunning),
-                              NSRunningApplication(processIdentifier:window.pid)?.bundleIdentifier == window.bundleID,
-                              NSRunningApplication(processIdentifier:window.pid)?.isHidden == false,
-                              WFWindowID(window.element) == window.id,
-                              attribute(window.element,kAXSubroleAttribute) as? String == kAXStandardWindowSubrole,
-                              (attribute(window.element,kAXMinimizedAttribute) as? Bool) != true,
-                              (attribute(window.element,"AXFullScreen") as? Bool) != true else { diagnostic.report.failedCheck="window_eligibility";throw FactoryError("Application or window eligibility changed; Space command stopped.") }
+                        let failure=SpaceMoveEligibility.firstFailure { condition in
+                            switch condition {
+                            case .workspaceAvailable:
+                                return .init(check:condition,passed:!workspaceBusy() || agentRunning)
+                            case .appIdentity:
+                                return .init(check:condition,passed:NSRunningApplication(processIdentifier:window.pid)?.bundleIdentifier == window.bundleID)
+                            case .appVisible:
+                                let hidden=NSRunningApplication(processIdentifier:window.pid)?.isHidden
+                                return .init(check:condition,passed:hidden == false,observedBool:hidden)
+                            case .windowIdentity:
+                                var id: UInt32=0
+                                let status=WFReadWindowID(window.element,&id)
+                                return .init(check:condition,passed:status == .success && id == window.id,
+                                    axStatus:status.rawValue,observedWindowID:id)
+                            case .standardWindow,.notMinimized,.notFullscreen:
+                                let key=condition == .standardWindow ? kAXSubroleAttribute : (condition == .notMinimized ? kAXMinimizedAttribute : "AXFullScreen")
+                                var value: CFTypeRef?
+                                let status=AXUIElementCopyAttributeValue(window.element,key as CFString,&value)
+                                // Match attribute(): discard the value on a failed read.
+                                let observed=status == .success ? value : nil
+                                let flag=observed as? Bool
+                                let passed=condition == .standardWindow ? (observed as? String == kAXStandardWindowSubrole) : flag != true
+                                return .init(check:condition,passed:passed,axStatus:status.rawValue,observedBool:flag)
+                            }
+                        }
+                        if let failure {
+                            diagnostic.report.eligibilityFailure=failure
+                            diagnostic.report.failedCheck="window_eligibility"
+                            throw FactoryError("Application or window eligibility changed (\(failure.check.rawValue)); Space command stopped.")
+                        }
                         let fresh = try topology(context.display)
                         guard fresh.map(\.id) == entries.map(\.id),fresh.map(\.kind) == entries.map(\.kind) else { diagnostic.report.failedCheck="desktop_topology";throw FactoryError("Desktop order changed; Space command stopped.") }
                     }

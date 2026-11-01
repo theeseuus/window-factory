@@ -1,5 +1,29 @@
 # Source baseline
 
+## 2026-11-01 — precise Space-move eligibility diagnostics, build 63
+
+A captured build-60 Rex move reached destination membership and dispatched follow,
+then stopped at the combined eligibility guard before any focus request, with no
+new input detected. That report cannot identify which eligibility condition
+failed. Chrome being foreground on the destination is not itself an eligibility
+condition; the destination-app correlation remains unproven.
+
+Schema 3 now records the first failed eligibility condition and native read status
+where applicable, including the observed ID for exact-window failures. The HUD
+error also names the condition. Checks preserve their ordering, short circuit,
+optional-attribute behavior and cancellation policy. No automatic retries,
+additional live observers or changes to focus/movement behavior are introduced.
+The bridge exposes the existing window-ID read status without changing callers
+that use the zero-on-failure helper. This is diagnostic instrumentation, not a
+confirmed fix; installation and a new owner-controlled occurrence are needed to
+identify the Rex failure.
+
+Source validation (including pinned-module integrity), the full native suite
+(including 107 Space-movement assertions) and an explicitly ad hoc signed local
+build passed. The regressions cover first-failure attribution, short-circuit read
+ordering, native-error retention, serialization and older-report compatibility.
+No installation, restart or live Space move was performed.
+
 ## 2026-11-01 — normal approval retry in handoff prompts, build 60
 
 A real desktop handoff reached the correct repository but stopped when the tool

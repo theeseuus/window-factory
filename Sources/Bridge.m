@@ -53,8 +53,12 @@ NSArray *WFWindowSpaces(CGWindowID window) {
     return spaces;
 }
 CGWindowID WFWindowID(AXUIElementRef window) {
-    load(); CGWindowID wid=0;
-    return getWindowID && getWindowID(window,&wid)==kAXErrorSuccess ? wid : 0;
+    CGWindowID wid=0;
+    return WFReadWindowID(window,&wid)==kAXErrorSuccess ? wid : 0;
+}
+AXError WFReadWindowID(AXUIElementRef window,CGWindowID *windowID) {
+    load(); *windowID=0;
+    return getWindowID ? getWindowID(window,windowID) : kAXErrorNotImplemented;
 }
 BOOL WFReadFrame(AXUIElementRef window,CGRect *frame) {
     CFTypeRef p=NULL,s=NULL;

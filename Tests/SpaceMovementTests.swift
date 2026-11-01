@@ -133,6 +133,35 @@ import Foundation
         let metadata=SpaceMoveInputEvent(elapsedMS:12,sourcePID:123,sourceStateID:1,matchesMoveShortcut:true,isRepeat:false)
         let json=try JSONEncoder().encode(metadata)
         check(try JSONDecoder().decode(SpaceMoveInputEvent.self,from:json)==metadata,"event origin/classification round trips without raw key values")
+        // Failure attribution must preserve short circuit and native evidence.
+        let conditions=SpaceMoveEligibilityCheck.allCases
+        for (index,condition) in conditions.enumerated() {
+            var reads: [SpaceMoveEligibilityCheck]=[]
+            let failure=SpaceMoveEligibility.firstFailure { current in
+                reads.append(current)
+                return .init(check:current,passed:current != condition,
+                    axStatus:current == .standardWindow ? -25204 : nil)
+            }
+            check(failure?.check == condition,"specific eligibility failure survives: \(condition)")
+            check(reads == Array(conditions.prefix(index+1)),"no later AX reads after eligibility failure")
+            if condition == .standardWindow {check(failure?.axStatus == -25204,"cannot-complete error is preserved")}
+            var report=SpaceMoveDiagnosticReport(invocation:"fixture",direction:1)
+            report.failedCheck="window_eligibility";report.eligibilityFailure=failure
+            let data=try JSONEncoder().encode(report)
+            check(try JSONDecoder().decode(SpaceMoveDiagnosticReport.self,from:data).eligibilityFailure == failure,"failure evidence survives CLI serialization")
+        }
+        var eligibilityReads=0
+        check(SpaceMoveEligibility.firstFailure { condition in
+            eligibilityReads += 1
+            return .init(check:condition,passed:true)
+        } == nil && eligibilityReads == conditions.count,"eligible target completes all guards")
+        // Simulate an older report by removing the new optional field.
+        var legacy=SpaceMoveDiagnosticReport(invocation:"fixture",direction:1)
+        legacy.schemaVersion=2
+        var legacyObject=try JSONSerialization.jsonObject(with:JSONEncoder().encode(legacy)) as! [String:Any]
+        legacyObject.removeValue(forKey:"eligibilityFailure")
+        let legacyData=try JSONSerialization.data(withJSONObject:legacyObject)
+        check(try JSONDecoder().decode(SpaceMoveDiagnosticReport.self,from:legacyData).eligibilityFailure == nil,"older reports decode without invented evidence")
         print("native Space movement: \(assertions) assertions passed; no desktop queries or mutations")
     }
 }
