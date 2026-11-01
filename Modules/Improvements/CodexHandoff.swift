@@ -11,16 +11,27 @@ public enum ImprovementHandoffLink {
     public static func chatURL(_ id: UUID) -> URL {URL(string:"codex://threads/\(id.uuidString.lowercased())")!}
     public static func prompt(request: Improvement, handoff: ImprovementHandoff, application: ImprovementApplication) throws -> String {
         struct Input: Encodable {
-            let requestID: UUID, handoffID: UUID, text: String, context: String, sourceBuild: String
+            let requestID: UUID, handoffID: UUID, text: String, context: String, sourceBuild: String, repository: String
         }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted,.sortedKeys]
-        let data = Input(requestID:request.id,handoffID:handoff.id,text:request.text,context:request.context,sourceBuild:request.build)
+        let data = Input(requestID:request.id,handoffID:handoff.id,text:request.text,context:request.context,sourceBuild:request.build,repository:handoff.repository)
         let body = String(decoding:try encoder.encode(data),as:UTF8.self)
         return """
         \(application.name) improvement — request \(request.id.uuidString)
         The owner prepared this request in \(application.name) and pressed Send here in Codex.
         Work in this chat and the selected \(application.name) repository. Follow AGENTS.md,
         machine policy and \(application.instructionsPath). Do not start other agents or pick up saved backlog.
+
+        This request belongs in ONE local Codex coding chat in the application's saved project.
+        Before linking, verify that this chat's working directory resolves to the repository
+        in the request JSON. If the workspace is wrong, stop and ask the owner to select the
+        correct Codex project; do not work from a generated projectless folder or create a
+        second Work/ChatGPT chat. When desktop project tools are available, inspect this chat
+        and the saved projects, match the repository path exactly, and verify project membership.
+        If unassigned, use the normal project-move tool for this chat and verify the result.
+        Never select a project merely by its name, fabricate an ID, change access grants or
+        claim project filing without confirmation. If filing cannot be verified, explain the
+        blocker before product work. Keep the original request linked to this coding chat.
 
         First link THIS chat back to the request, before investigating or changing code:
         1. Obtain the current chat UUID from the single non-secret CODEX_THREAD_ID environment
@@ -74,10 +85,16 @@ public enum ImprovementHandoffLink {
         \(body)
         """
     }
-    public static func newChatURL(request: Improvement, handoff: ImprovementHandoff, application: ImprovementApplication) throws -> URL {
+    public static func newChatURL(request: Improvement, handoff: ImprovementHandoff, application: ImprovementApplication, projectID: String? = nil) throws -> URL {
         var components = URLComponents()
         components.scheme = "codex"; components.host = "threads"; components.path = "/new"
-        components.queryItems = [URLQueryItem(name:"path",value:handoff.repository),URLQueryItem(name:"prompt",value:try prompt(request:request,handoff:handoff,application:application))]
+        components.queryItems = [URLQueryItem(name:"mode",value:"codex"),URLQueryItem(name:"path",value:handoff.repository),URLQueryItem(name:"prompt",value:try prompt(request:request,handoff:handoff,application:application))]
+        if let projectID {
+            guard !projectID.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else {
+                throw ImprovementFailure("invalid_handoff", "A supplied Codex project ID must not be blank.")
+            }
+            components.queryItems?.append(URLQueryItem(name:"projectId",value:projectID))
+        }
         // URLSearchParams-style decoders treat raw '+' as a space. Preserve it as data.
         components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of:"+",with:"%2B")
         guard let url = components.url else {throw ImprovementFailure("invalid_handoff", "Could not construct a Codex handoff URL.")}

@@ -1,6 +1,6 @@
 # Improvement requests — Window Factory pilot
 
-Version: 1.4
+Version: 1.5
 Updated: 2026-11-01
 
 ## Two connected places
@@ -164,3 +164,14 @@ CLI error codes are preserved. Claude and local-model routing are not implemente
 
 Build 62 introduces this extraction. It does not establish live Space-move
 behaviour; unrelated diagnostic changes may be developed separately.
+
+## Coding-mode routing
+
+Build 65 explicitly supplies `mode=codex` alongside the selected repository path.
+The installed desktop handler resolves that path to its saved local project;
+without an explicit mode, the same link could inherit ChatGPT and create an
+intermediate conversation. The shared prompt now checks the coding workspace
+and saved-project membership before linking and product work. It must report a
+routing blocker rather than create another Work chat or silently work projectless.
+These desktop parameters are version-sensitive; validate after app updates with
+ChatGPT selected, one synthetic request, actual project membership and repo checks.

@@ -1,5 +1,13 @@
 # Source baseline
 
+## 2026-11-01 — explicit Codex routing, build 65
+
+Update the pinned Improvements module to request Codex mode explicitly when
+preparing a repository chat. Preserve request IDs/history and final Send in Codex.
+The prompt checks workspace and saved-project membership before linking; a
+ChatGPT intermediary or generated projectless workspace is a routing failure.
+
+
 ## 2026-11-01 — present requested windows above the picker, build 64
 
 Applications and Improve Window Factory now read the same keep-on-top preference

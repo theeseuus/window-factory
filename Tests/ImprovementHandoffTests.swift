@@ -29,6 +29,7 @@ enum ImprovementHandoffTests {
         let query = Dictionary(uniqueKeysWithValues:components.queryItems!.map {($0.name,$0.value!)})
         check(components.scheme == "codex" && components.host == "threads" && components.path == "/new","uses documented new-chat route")
         check(query["path"] == repo.resolvingSymlinksInPath().path,"workspace path survives URL encoding")
+        check(query["mode"] == "codex", "handoff explicitly selects coding mode instead of inheriting ChatGPT")
         check(!opened[0].absoluteString.contains("+"),"literal plus signs are safe for both URLComponents and form-style query decoders")
         check(query["prompt"]!.contains("A & B + C?") && query["prompt"]!.contains("$(do not execute) 😀"),"request remains data and survives URL encoding")
         check(query["prompt"]!.contains(handoff.id.uuidString) && query["prompt"]!.contains("CODEX_THREAD_ID") && query["prompt"]!.contains("improvement-link"),"prepared prompt carries stable callback IDs and current-chat discovery")
