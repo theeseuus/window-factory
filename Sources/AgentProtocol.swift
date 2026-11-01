@@ -70,7 +70,7 @@ struct AgentRequest: Codable, Equatable {
       guard let name, try Recipe.normalizedName(name) == name else {
         throw AgentFailure("invalid_name", "Supply a valid layout name.")
       }
-    } else if name != nil {
+    } else if name != nil && command != .improvementCodexCreateProject {
       throw AgentFailure("invalid_request", "This command does not take a layout name.")
     }
     if command == .job || command == .cancel {

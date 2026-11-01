@@ -143,6 +143,13 @@ enum ImprovementHandoffTests {
             return CodexSendReceipt(chatID:destination.chatID,turnID:UUID().uuidString,messageID:message)
         }
         dispatcher.desktopNewChat = {p,r in creationCalls+=1;check(p==projectID && r==target.repository,"chat creation is project-bound");return providerChat}
+        let providerCreateID=UUID(),providerCreateName="Fixture provider project"
+        let providerCreated=CodexProject(id:UUID().uuidString,name:providerCreateName,roots:[target.repository])
+        dispatcher.desktopCreate={name,path,id in
+            check(name==providerCreateName && path==target.repository && id==providerCreateID,"CLI project creation preserves name, root and idempotency key")
+            return providerCreated
+        }
+        check(try await call(["improvement-codex-create-project","--name",providerCreateName,"--repository",target.repository,"--request-id",providerCreateID.uuidString]).result?.tools?.codexProject==providerCreated,"project creation passes generic CLI name validation and the shared provider dispatcher")
         check(try await call(["improvement-codex-projects"]).result?.tools?.codexProjects==[project],"CLI returns actual provider project records")
         check(try await call(["improvement-codex-chats","--codex-project",projectID]).result?.tools?.codexChats==[providerChat],"CLI returns chosen project/repository chats")
         check(try await call(["improvement-connect","--codex-project",projectID,"--thread",directChat]).result?.tools?.codexDestination==target,"CLI persists the verified project and chat")
@@ -166,7 +173,7 @@ enum ImprovementHandoffTests {
         let createdOnce=try await call(chatArgs),createdTwice=try await call(chatArgs)
         check(createdOnce.ok && createdTwice.ok && creationCalls==1,"chat creation receipt survives retry without another create")
         check(try await call(["improvement-disconnect"]).ok && dispatcher.configuration().desktopDestination==nil,"CLI can reset setup anytime")
-        for args in [["improvement-connect","--codex-project",projectID],["improvement-send"],["improvement-remove","--improvement",direct.id.uuidString],["improvement-codex-chats","--codex-project","folder-name"],["improvement-codex-projects","--display","1"]] {
+        for args in [["improvement-codex-create-project","--repository",target.repository],["improvement-codex-projects","--name","not-a-layout"],["improvement-connect","--codex-project",projectID],["improvement-send"],["improvement-remove","--improvement",direct.id.uuidString],["improvement-codex-chats","--codex-project","folder-name"],["improvement-codex-projects","--display","1"]] {
             do {_ = try AgentCLI.parse(args);check(false,"invalid direct arguments accepted")}catch {check(true,"strict direct arguments rejected")}
         }
         let uiStore=ImprovementStore(url:fixture.appendingPathComponent("ui/requests.json"),version:"test",build:"70")

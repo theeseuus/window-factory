@@ -1,5 +1,13 @@
 # Source baseline
 
+## 2026-11-02 — project-create CLI validation, build 71
+
+Permit the provider project-create command's name through the generic name gate;
+other non-layout commands still reject layout names. Add a command-level provider
+creation regression. The isolated live creation pilot found this before a Codex
+project was created; keep its original operation IDs when resuming the pilot.
+
+
 ## 2026-11-01 — direct desktop project/chat connection, build 70
 
 Connect Improvements to actual Codex desktop projects and coding chats through
