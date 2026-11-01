@@ -44,7 +44,8 @@ public struct CodexChat: Codable, Sendable, Equatable, Identifiable {
     public init(id: String,name: String,repository: String,projectID: String?) {self.id=id;self.name=name;self.repository=repository;self.projectID=projectID}
     static func decode(_ value: CodexJSON) throws -> Self {
         guard let id=value["id"].string, let cwd=value["cwd"].string else {throw ImprovementFailure("codex_protocol_error","Invalid chat response.")}
-        return Self(id:id,name:value["name"].string ?? value["preview"].string ?? id,repository:cwd,projectID:value["projectId"].string)
+        let name=[value["name"].string,value["preview"].string].compactMap {$0}.first {!$0.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty} ?? "New coding chat"
+        return Self(id:id,name:name,repository:cwd,projectID:value["projectId"].string)
     }
 }
 public struct CodexDestination: Codable, Sendable, Equatable {
@@ -113,26 +114,15 @@ public struct CodexDesktop: Sendable {
             throw ImprovementFailure("codex_project_unverified","This chat is unfiled or belongs to another project. Explicitly assign an unfiled chat during setup before sending.")
         }
     }
+    /// Creation is deliberately unavailable after the live desktop pilot returned
+    /// records that were not visible/persistent in the running app. Keep these
+    /// entry points source-compatible, but reject before starting any process.
+    public static let creationUnavailableMessage = "Create the project and its initial coding chat in Codex, then refresh and select them here. Direct creation from Improvements is unavailable: desktop sidebar registration and empty-chat persistence are not verified."
     public func createProject(name: String, repository: String, operationID: UUID) async throws -> CodexProject {
-        guard !name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty, name.utf8.count <= 200,
-              repository.hasPrefix("/"), (try? URL(fileURLWithPath:repository).resourceValues(forKeys:[.isDirectoryKey]).isDirectory) == true else {
-            throw ImprovementFailure("invalid_codex_project","Choose a name and an existing absolute repository folder.")
-        }
-        return try await Task.detached {try self.withRPC {rpc in
-            let project=try CodexProject.decode(rpc.call("project/create",["idempotencyKey":.string(operationID.uuidString),"name":.string(name),"roots":.array([.object(["path":.string(repository)])])])["project"])
-            guard project.name==name,project.roots.contains(repository) else {throw ImprovementFailure("codex_destination_mismatch","The returned project differs from the requested project.")}
-            return project
-        }}.value
+        throw ImprovementFailure("codex_creation_unavailable",Self.creationUnavailableMessage)
     }
     public func createChat(projectID:String,repository:String) async throws -> CodexChat {
-        try await Task.detached {try self.withRPC {rpc in
-            let project=try CodexProject.decode(rpc.call("project/read",["projectId":.string(projectID)])["project"])
-            guard UUID(uuidString:project.id)==UUID(uuidString:projectID),project.roots.contains(repository) else {throw ImprovementFailure("codex_destination_mismatch","Choose a repository root from the actual project.")}
-            let chat=try CodexChat.decode(rpc.call("thread/start",["projectId":.string(projectID),"cwd":.string(repository),"ephemeral":.bool(false)])["thread"])
-            try Self.validate(project:project,chat:chat,allowUnfiled:false)
-            guard chat.repository==repository else {throw ImprovementFailure("codex_destination_mismatch","The new chat has another repository.")}
-            return chat
-        }}.value
+        throw ImprovementFailure("codex_creation_unavailable",Self.creationUnavailableMessage)
     }
     public func checkReady(_ destination:CodexDestination) async throws {
         let selected=try await select(projectID:destination.projectID,chatID:destination.chatID)
@@ -232,7 +222,7 @@ private final class DesktopRPC {
     }
     static func deadline()->UInt64 {DispatchTime.now().uptimeNanoseconds+15_000_000_000}
     func call(_ method:String,_ params:[String:CodexJSON]) throws -> CodexJSON {
-        let allowed:Set<String>=["initialize","project/list","project/read","project/create","thread/list","thread/read","thread/metadata/update","thread/start"]
+        let allowed:Set<String>=["initialize","project/list","project/read","thread/list","thread/read","thread/metadata/update"]
         guard allowed.contains(method) else {throw ImprovementFailure("codex_operation_unsupported","This connector does not expose that Codex operation.")}
         let id=UUID().uuidString,deadline=Self.deadline()
         var data=try JSONEncoder().encode(CodexJSON.object(["id":.string(id),"method":.string(method),"params":.object(params)]));data.append(10)

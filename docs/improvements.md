@@ -1,6 +1,6 @@
 # Improvement requests
 
-Version: 2.2
+Version: 2.3
 Updated: 2026-11-02
 
 ## Setup once, then send
@@ -12,12 +12,10 @@ Older chats with no recorded server project are labelled as unfiled repository
 matches: assigning one requires an explicit setup confirmation. A chat already
 filed in another project is never moved silently.
 
-Create offers a Codex project for an existing repository or a separate local
-folder/Git repository. New folders are never overwritten, committed or published;
-partial failures are preserved. **New chat…** requests an empty, project-bound
-coding chat and starts no model work. These creation paths have fixture coverage;
-desktop sidebar visibility still requires a live pilot. The project list uses
-server IDs, which differ from legacy desktop-tool IDs.
+Create the initial project and coding chat in Codex, then refresh and select them
+here. The isolated external-creation pilot failed sidebar visibility and empty-chat
+persistence, so creation actions are unavailable rather than claiming success.
+The project list uses server IDs, which differ from legacy desktop-tool IDs.
 
 After setup, describe an issue or feature and choose:
 
@@ -60,9 +58,10 @@ remain closed; the Codex desktop app must be running. Direct send opens the exac
 chat, not the Improvements window, and never simulates clicks or types a prompt.
 See [CLI.md](../CLI.md) for JSON operations and exact flags.
 
-The connection CLI can list projects/chats, configure/reset setup, create provider
-projects/chats, save requests, send, inspect receipts/history and remove stale
-notes. Creation and sends use stable --request-id UUIDs. Local client timeouts are
+The connection CLI can list projects/chats, configure/reset setup, save requests, send, inspect receipts/history and remove stale
+notes. Sends use stable --request-id UUIDs. Provider creation commands return
+`codex_creation_unavailable` without provider mutation. Historical creation
+receipts are verified before reuse; missing chats are never recreated automatically. Local client timeouts are
 45 seconds for desktop/setup calls. If a response is lost, inspect the request
 or creation receipt rather than submitting a fresh operation ID blindly.
 
@@ -98,6 +97,6 @@ Tests use isolated provider/socket fixtures; do not use live data or clipboard i
 them. On 2026-11-02, owner setup, direct UI Send and a separately approved CLI Send
 with the Improvements window closed all passed. Both returned exact receipt IDs,
 linked the selected Window Factory chat and appended their exact no-code outcome
-notes to their original requests. New-project/new-chat sidebar visibility still
-requires a separate live pilot.
+notes to their original requests. The separate creation pilot failed; creation remains unavailable pending
+a verified desktop registration and persistent-chat lifecycle.
 Future app-context collection must be visible, bounded and owner-controlled.

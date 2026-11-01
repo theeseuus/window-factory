@@ -1,5 +1,14 @@
 # Source baseline
 
+## 2026-11-02 — truthful desktop creation boundary, build 72
+
+- Keep verified direct existing-chat delivery and callbacks in UI and CLI.
+- Remove unverified creation actions from connection setup; explain the one-time
+  initial project/chat setup in Codex and refresh. Provider creation commands now
+  report unavailable before external side effects.
+- Verify historical creation receipts before reuse; never recreate a lost chat.
+- Update the shared snapshot and regress unavailable creation and stale receipts.
+
 ## 2026-11-02 — project-create CLI validation, build 71
 
 Permit the provider project-create command's name through the generic name gate;

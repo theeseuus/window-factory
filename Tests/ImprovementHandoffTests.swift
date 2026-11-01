@@ -172,6 +172,12 @@ enum ImprovementHandoffTests {
         let chatArgs=["improvement-codex-new-chat","--codex-project",projectID,"--repository",target.repository,"--request-id",chatCreationID]
         let createdOnce=try await call(chatArgs),createdTwice=try await call(chatArgs)
         check(createdOnce.ok && createdTwice.ok && creationCalls==1,"chat creation receipt survives retry without another create")
+        dispatcher.desktopSelect={_,_,_ in throw ImprovementFailure("codex_request_failed","Fixture chat no longer exists")}
+        check(try await call(chatArgs).code=="codex_request_failed" && creationCalls==1,"a stale creation receipt is verified and never creates a replacement")
+        dispatcher.desktopNewChat={_,_ in throw ImprovementFailure("codex_creation_unavailable",CodexDesktop.creationUnavailableMessage)}
+        let unavailableArgs=["improvement-codex-new-chat","--codex-project",projectID,"--repository",target.repository,"--request-id",UUID().uuidString]
+        let unavailableFirst=try await call(unavailableArgs),unavailableRetry=try await call(unavailableArgs)
+        check(unavailableFirst.code=="codex_creation_unavailable" && unavailableRetry.code=="codex_creation_unavailable","unsupported creation stays explicit on retry rather than inventing uncertainty")
         check(try await call(["improvement-disconnect"]).ok && dispatcher.configuration().desktopDestination==nil,"CLI can reset setup anytime")
         for args in [["improvement-codex-create-project","--repository",target.repository],["improvement-codex-projects","--name","not-a-layout"],["improvement-connect","--codex-project",projectID],["improvement-send"],["improvement-remove","--improvement",direct.id.uuidString],["improvement-codex-chats","--codex-project","folder-name"],["improvement-codex-projects","--display","1"]] {
             do {_ = try AgentCLI.parse(args);check(false,"invalid direct arguments accepted")}catch {check(true,"strict direct arguments rejected")}
@@ -193,6 +199,7 @@ enum ImprovementHandoffTests {
         check(buttons.contains(where:{$0.title=="Connection…"}) && buttons.contains(where:{$0.title=="Remove from list…"}),"setup can be reopened and stale notes removed")
         let setup=CodexConnectionWindow(dispatcher:uiDispatcher)
         let setupViews=descendants(setup.window.contentView!),setupButtons=setupViews.compactMap {$0 as? NSButton}
+        check(!setupButtons.contains(where:{$0.title=="Create project…" || $0.title=="New chat…"}) && setupViews.compactMap {$0 as? NSTextField}.contains(where:{$0.stringValue.contains("not available yet")}),"setup exposes the verified creation boundary instead of misleading create actions")
         setupButtons.first {$0.title=="Load / refresh projects"}!.performClick(nil)
         for _ in 0..<100 {if setupButtons.first(where:{$0.title=="Use this chat"})?.isEnabled == true {break};try await Task.sleep(for:.milliseconds(10))}
         let setupPickers=setupViews.compactMap {$0 as? NSPopUpButton}

@@ -181,12 +181,23 @@ final class ImprovementDispatcher {
             let previous=try ImprovementFiles.read(ChatCreation.self,from:url)
             guard previous.projectID==projectID,previous.repository==repository else {throw AgentFailure("request_conflict","This creation ID has another destination.")}
             guard let chat=previous.chat else {throw AgentFailure("codex_creation_unconfirmed","An earlier chat creation did not return a receipt. Inspect Codex before creating another chat.")}
+            // A provider receipt can outlive a nonpersistent empty chat. Verify
+            // the actual record on retry instead of repeating cached success.
+            let checked=try await desktopSelect(projectID,chat.id,false)
+            guard checked.repository==repository else {throw AgentFailure("codex_destination_mismatch","The previously created chat has another repository.")}
             return chat
         }
         try ImprovementFiles.write(ChatCreation(projectID:projectID,repository:repository,chat:nil),to:url)
-        let chat=try await desktopNewChat(projectID,repository)
-        try ImprovementFiles.write(ChatCreation(projectID:projectID,repository:repository,chat:chat),to:url)
-        return chat
+        do {
+            let chat=try await desktopNewChat(projectID,repository)
+            try ImprovementFiles.write(ChatCreation(projectID:projectID,repository:repository,chat:chat),to:url)
+            return chat
+        } catch let error as ImprovementFailure where error.code=="codex_creation_unavailable" {
+            // This provider gate runs before any external side effect. Preserve
+            // uncertainty for other failures, but don't invent it for this one.
+            try FileManager.default.removeItem(at:url)
+            throw error
+        }
     }
     func disconnectDesktop() throws {
         var config=try configuration();config.desktopDestination=nil

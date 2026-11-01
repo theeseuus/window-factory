@@ -1,7 +1,7 @@
 # Window Factory CLI
 
-Version: 1.11
-Updated: 2026-11-01
+Version: 1.12
+Updated: 2026-11-02
 
 `scripts/window-factory` (or the installed binary with `--cli`) provides JSON access to the running app's layout, application, tiling and direct window operations.
 It does not open Window Factory’s library, confirmation panels or Settings,
@@ -245,9 +245,9 @@ The provider context is desktop/default, separate from codex-ai/codex-dev.
 | `improvement-codex-chats --codex-project SERVER_UUID` | List assigned chats and clearly marked legacy/unfiled chats matching the project's roots. |
 | `improvement-connect --codex-project SERVER_UUID --thread CHAT_UUID [--confirm]` | Verify and persist the chosen destination. --confirm explicitly assigns an unfiled chat; a chat belonging to another project is rejected. |
 | `improvement-disconnect` | Reset direct setup for future sends. Existing request destinations and links remain. |
-| `improvement-codex-create-project --name NAME --repository PATH --request-id UUID` | Ask Codex to register an existing repository. Its idempotency key prevents duplicate creation on identical retries. |
+| `improvement-codex-create-project --name NAME --repository PATH --request-id UUID` | Currently returns `codex_creation_unavailable` before provider mutation. Create the initial project in Codex, then list/select it. |
 | `improvement-create-project --destination NEW_FOLDER --request-id UUID` | Create an absent local folder and initialize Git through the owner tool. Does not itself register a provider project, commit or publish. |
-| `improvement-codex-new-chat --codex-project SERVER_UUID --repository ROOT --request-id UUID` | Create an empty project-bound chat. A private setup journal preserves its receipt; unconfirmed creation is never automatically repeated. |
+| `improvement-codex-new-chat --codex-project SERVER_UUID --repository ROOT --request-id UUID` | Currently returns `codex_creation_unavailable` before provider mutation. Create the initial chat in Codex; historical receipts are verified before reuse and never silently recreated. |
 | `improvement-submit --text TEXT [--context TEXT] [--request-id UUID]` | Save only, with the original version/build and text. |
 | `improvement-send --improvement UUID [--request-id UUID]` | Send to the saved verified destination, opening only that exact chat. Return an accepted chat/turn/message receipt; use no clipboard or second Send. |
 | `improvements [--improvement UUID | --offset N]` | Read a complete record or visible summaries (100/page). Direct reads include removed notes for callbacks/recovery. |
