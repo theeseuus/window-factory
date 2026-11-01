@@ -1,10 +1,12 @@
 {
   "module": "Improvements",
-  "revision": "7cd33ee22601b8bdd70896e971bfddf59f1f82d1",
+  "revision": "e9aa6a62ecc1fbd365c4d68b6cc2848c756cc4eb",
   "files": {
-    "CodexHandoff.swift": "d6338ce305e0802702b4674fb01e3be0cb438c317df69c28cfefd65a41247414",
+    "CodexDesktop.swift": "de0a0e44664c368be22fed361820727f38fba5e66752bc23ed76e2a1331a9bf1",
+    "CodexHandoff.swift": "5929bd4d7455fbbae8a2da26772d3fe8700bdbe9090fd3972efb98a4d9d52db8",
     "ImprovementApplication.swift": "5912941dd4153ab5ec19cba72c1621bf50f36e8db4a86696ba96a646074e6526",
-    "ImprovementStore.swift": "fc2597cb45d6660ca14978969c4c532ae3628a353a9acdd7c5528916943aad46",
+    "ImprovementDelivery.swift": "d5958ae9c21d6c01eb1ba9a5dfbbed9845180de01ff10578714485ffb18c9c6e",
+    "ImprovementStore.swift": "939c03c37de3c62a2bcd00d834a99acc9ad0cc599add15631fdf1d8a4bb341c3",
     "LegacyRecords.swift": "ac32c0f64cbe1edcf8124c06fda71fbd55427ae5fd4361dd56a93fe93d79afd0"
   }
 }

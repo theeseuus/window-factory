@@ -129,38 +129,91 @@ enum ImprovementHandoffTests {
         for args in [["improvement-prepare"],["improvement-create-project","--destination","app"],["improvement-agent","--destination","relative"],["improvements","--destination",external.path],["improvement-open","--improvement",first.id.uuidString,"--wait"]] {
             do {_ = try AgentCLI.parse(args); check(false,"invalid manual args accepted")} catch {check(true,"strict manual args rejected")}
         }
-        // Hidden native UI actions use injected clipboard/opener; no real desktop or clipboard effects.
-        let uiStore = ImprovementStore(url:fixture.appendingPathComponent("ui/requests.json"),version:"test",build:"69")
-        let uiDispatcher = ImprovementDispatcher(store:uiStore,watch:false)
+        // Direct UI and CLI use the same injected provider: no live desktop, model or clipboard.
+        let projectID=UUID().uuidString.lowercased(),directChat=UUID().uuidString.lowercased()
+        let target=CodexDestination(projectID:projectID,projectName:"Fixture project",repository:repo.resolvingSymlinksInPath().path,chatID:directChat)
+        let project=CodexProject(id:projectID,name:target.projectName,roots:[target.repository])
+        let providerChat=CodexChat(id:directChat,name:"Fixture coding chat",repository:target.repository,projectID:projectID)
+        var directSends=0,creationCalls=0
+        dispatcher.desktopProjects = {[project]};dispatcher.desktopChats = {_ in [providerChat]}
+        dispatcher.desktopSelect = {p,c,_ in check(p==projectID && c==directChat,"setup uses exact provider IDs");return target}
+        dispatcher.desktopReady = {_ in}
+        dispatcher.desktopTransmit = {prompt,destination,message in
+            directSends+=1;check(destination==target && prompt.contains("destinationChatID"),"direct prompt carries its exact chat destination")
+            return CodexSendReceipt(chatID:destination.chatID,turnID:UUID().uuidString,messageID:message)
+        }
+        dispatcher.desktopNewChat = {p,r in creationCalls+=1;check(p==projectID && r==target.repository,"chat creation is project-bound");return providerChat}
+        check(try await call(["improvement-codex-projects"]).result?.tools?.codexProjects==[project],"CLI returns actual provider project records")
+        check(try await call(["improvement-codex-chats","--codex-project",projectID]).result?.tools?.codexChats==[providerChat],"CLI returns chosen project/repository chats")
+        check(try await call(["improvement-connect","--codex-project",projectID,"--thread",directChat]).result?.tools?.codexDestination==target,"CLI persists the verified project and chat")
+        let preservedSetup=try dispatcher.configuration()
+        let setupFolder=fixture.appendingPathComponent("new-setup-folder")
+        dispatcher.projectInitializer = {path in try FileManager.default.createDirectory(atPath:path,withIntermediateDirectories:false);return URL(fileURLWithPath:path)}
+        _ = try await dispatcher.createProject(setupFolder.path,selectAsDestination:false)
+        check(try dispatcher.configuration()==preservedSetup,"creating a new setup folder preserves the existing connection until Use is chosen")
+        let direct=try store.submit(text:"Direct request",context:"",source:"cli"),beforeCopies=copied.count
+        let directArgs=["improvement-send","--improvement",direct.id.uuidString]
+        check(try await call(directArgs).result?.tools?.codexReceipt?.chatID==directChat,"headless send returns an accepted chat receipt")
+        check(try await call(directArgs).ok && directSends==1 && copied.count==beforeCopies,"direct send retry does not duplicate or use clipboard")
+        let nextDirect=try store.submit(text:"Second request in the same chat",context:"",source:"cli")
+        check(try await call(["improvement-send","--improvement",nextDirect.id.uuidString]).code=="codex_chat_busy","another in-progress request prevents chat interruption")
+        _ = try store.update(direct.id,operationID:UUID(),revision:1,state:.declined,note:"Fixture finished",targetBuild:nil)
+        check(try await call(["improvement-send","--improvement",nextDirect.id.uuidString]).ok && directSends==2,"chosen chat is reused after previous outcome")
+        check(try await call(["improvement-remove","--improvement",direct.id.uuidString,"--confirm"]).ok,"CLI removes stale note from the visible list")
+        check(try !store.all().contains(where:{$0.id==direct.id}) && store.get(direct.id).text==direct.text,"removal preserves the original and its callback history")
+        let chatCreationID=UUID().uuidString
+        let chatArgs=["improvement-codex-new-chat","--codex-project",projectID,"--repository",target.repository,"--request-id",chatCreationID]
+        let createdOnce=try await call(chatArgs),createdTwice=try await call(chatArgs)
+        check(createdOnce.ok && createdTwice.ok && creationCalls==1,"chat creation receipt survives retry without another create")
+        check(try await call(["improvement-disconnect"]).ok && dispatcher.configuration().desktopDestination==nil,"CLI can reset setup anytime")
+        for args in [["improvement-connect","--codex-project",projectID],["improvement-send"],["improvement-remove","--improvement",direct.id.uuidString],["improvement-codex-chats","--codex-project","folder-name"],["improvement-codex-projects","--display","1"]] {
+            do {_ = try AgentCLI.parse(args);check(false,"invalid direct arguments accepted")}catch {check(true,"strict direct arguments rejected")}
+        }
+        let uiStore=ImprovementStore(url:fixture.appendingPathComponent("ui/requests.json"),version:"test",build:"70")
+        let uiDispatcher=ImprovementDispatcher(store:uiStore,watch:false)
         _ = try uiDispatcher.configure(repository:repo.path)
-        var uiURLs: [URL] = [], uiCopies: [String] = []
-        uiDispatcher.openURL = {uiURLs.append($0); return true}; uiDispatcher.copyPrompt = {uiCopies.append($0); return true}
-        let suite = "WindowFactory.ManualImprovementTest.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName:suite)!
+        var uiURLs:[URL]=[],uiCopies:[String]=[],uiSends=0
+        uiDispatcher.openURL={uiURLs.append($0);return true};uiDispatcher.copyPrompt={uiCopies.append($0);return true}
+        uiDispatcher.desktopProjects={[project]};uiDispatcher.desktopChats={_ in [providerChat]}
+        uiDispatcher.desktopSelect={_,_,_ in target};uiDispatcher.desktopReady={_ in}
+        uiDispatcher.desktopTransmit={_,dest,id in uiSends+=1;return CodexSendReceipt(chatID:dest.chatID,turnID:UUID().uuidString,messageID:id)}
+        let suite="WindowFactory.DirectImprovementTest.\(UUID().uuidString)",defaults=UserDefaults(suiteName:suite)!
         defer {defaults.removePersistentDomain(forName:suite)}
-        let ui = ImprovementsWindow(store:uiStore,preferences:FactoryPreferences(defaults:defaults),dispatcher:uiDispatcher)
-        func descendants(_ view: NSView) -> [NSView] {view.subviews.flatMap {[$0] + descendants($0)}}
-        let views = descendants(ui.window.contentView!), buttons = views.compactMap {$0 as? NSButton}
-        let input = views.compactMap {$0 as? NSTextView}.first {$0.isEditable}!
-        let picker = views.compactMap {$0 as? NSPopUpButton}.first!
-        check(picker.selectedItem?.title == "Window Factory (app project)" && picker.itemTitles.contains("Create project…") && picker.itemTitles.contains("Choose existing project…"),"destination defaults to app and exposes existing/create choices")
-        input.string = "Saved for later"; buttons.first {$0.title == "Save for later"}!.performClick(nil)
-        check(try uiStore.all().count == 1 && uiURLs.isEmpty && uiCopies.isEmpty,"Save does not prepare, copy or open")
-        buttons.first {$0.title == "Copy prepared request"}!.performClick(nil)
-        check(uiCopies.count == 1 && uiURLs.isEmpty,"copy-only action prepares a callback-capable prompt")
-        buttons.first {$0.title == "Copy selected & open…"}!.performClick(nil)
-        check(uiURLs == [ImprovementHandoffLink.manualComposerURL()],"selected preparation opens mode-only navigation")
-        let uiRequest = try uiStore.all()[0], uiChat = UUID()
-        _ = try uiStore.linkChat(uiRequest.id,handoffID:uiRequest.handoffs!.last!.id,threadID:uiChat)
-        let openChat = buttons.first {$0.title == "Open chat"}!
-        check(openChat.isEnabled && !buttons.first {$0.title == "Copy prepared request"}!.isEnabled,"linked request offers its chat and prevents a duplicate prepared task")
+        let ui=ImprovementsWindow(store:uiStore,preferences:FactoryPreferences(defaults:defaults),dispatcher:uiDispatcher)
+        func descendants(_ view:NSView)->[NSView] {view.subviews.flatMap {[$0]+descendants($0)}}
+        let views=descendants(ui.window.contentView!),buttons=views.compactMap {$0 as? NSButton}
+        let input=views.compactMap {$0 as? NSTextView}.first {$0.isEditable}!
+        check(buttons.contains(where:{$0.title=="Connection…"}) && buttons.contains(where:{$0.title=="Remove from list…"}),"setup can be reopened and stale notes removed")
+        let setup=CodexConnectionWindow(dispatcher:uiDispatcher)
+        let setupViews=descendants(setup.window.contentView!),setupButtons=setupViews.compactMap {$0 as? NSButton}
+        setupButtons.first {$0.title=="Load / refresh projects"}!.performClick(nil)
+        for _ in 0..<100 {if setupButtons.first(where:{$0.title=="Use this chat"})?.isEnabled == true {break};try await Task.sleep(for:.milliseconds(10))}
+        let setupPickers=setupViews.compactMap {$0 as? NSPopUpButton}
+        check(setupPickers.contains(where:{$0.itemTitles.contains(project.name)}) && setupPickers.contains(where:{$0.itemTitles.contains(providerChat.name)}),"setup lists actual project and chat records from the shared provider")
+        setupButtons.first {$0.title=="Use this chat"}!.performClick(nil)
+        for _ in 0..<100 {if try uiDispatcher.configuration().desktopDestination != nil {break};try await Task.sleep(for:.milliseconds(10))}
+        check(try uiDispatcher.configuration().desktopDestination==target,"setup window persists the exact provider project/chat selection")
+        setup.window.contentView!.layoutSubtreeIfNeeded()
+        check(!setup.window.isVisible && !setup.window.contentView!.hasAmbiguousLayout,"setup fixture stays hidden and lays out without desktop activation")
+        let beforeSaveURLs=uiURLs.count
+        input.string="Saved for later";buttons.first {$0.title=="Save for later"}!.performClick(nil)
+        check(try uiStore.all().count==1 && uiURLs.count==beforeSaveURLs && uiCopies.isEmpty && uiSends==0,"Save starts no model, clipboard or navigation")
+        _ = try await uiDispatcher.connectDesktop(projectID:projectID,chatID:directChat,assignUnfiled:false)
+        buttons.first {$0.title=="Send selected"}!.performClick(nil)
+        for _ in 0..<150 {if try uiStore.all()[0].delivery?.receipt != nil {break};try await Task.sleep(for:.milliseconds(10))}
+        let uiRequest=try uiStore.all()[0]
+        check(uiSends==1 && uiCopies.isEmpty && uiRequest.delivery?.receipt?.chatID==directChat,"native selected Send delivers directly without copying")
+        check(uiURLs.allSatisfy {$0==ImprovementHandoffLink.chatURL(UUID(uuidString:directChat)!)},"direct navigation opens only the exact chosen chat, never a composer")
+        let openChat=buttons.first {$0.title=="Open chat"}!
+        check(openChat.isEnabled && !buttons.first {$0.title=="Send selected"}!.isEnabled,"accepted request exposes its linked chat and prevents another send")
         openChat.performClick(nil)
-        check(uiURLs.last == ImprovementHandoffLink.chatURL(uiChat),"Open chat follows the actual callback link")
-        input.string = "A new request"; buttons.first {$0.title == "Copy & open Codex…"}!.performClick(nil)
-        check(try uiStore.all().count == 2 && input.string.isEmpty && uiStore.all().last!.state == .queued && uiStore.all().last!.handoffs!.last!.phase == "prepared","primary action saves/copies a new request without claiming it sent")
+        _ = try uiStore.update(uiRequest.id,operationID:UUID(),revision:1,state:.declined,note:"Fixture completed",targetBuild:nil)
+        input.string="A new direct request";buttons.first {$0.title=="Send to Codex"}!.performClick(nil)
+        for _ in 0..<150 {if try uiStore.all().last?.delivery?.receipt != nil {break};try await Task.sleep(for:.milliseconds(10))}
+        check(try uiStore.all().count==2 && input.string.isEmpty && uiSends==2 && uiCopies.isEmpty,"primary action saves and sends a new request to the configured chat")
         ui.window.contentView!.layoutSubtreeIfNeeded()
-        check(!ui.window.isVisible && !ui.window.contentView!.hasAmbiguousLayout,"manual UI lays out without activating real windows")
+        check(!ui.window.isVisible && !ui.window.contentView!.hasAmbiguousLayout,"direct UI fixtures never activate real windows")
         uiDispatcher.stop(); service.improvementOperation = nil
-        print("manual improvement handoff: \(assertions) assertions passed; destinations, copy/paste contract, creation, callbacks and native actions")
+        print("improvement handoff: \(assertions) assertions passed; legacy compatibility, direct destinations, receipts, retries, CLI and native actions")
     }
 }

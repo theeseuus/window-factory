@@ -14,14 +14,14 @@ public enum ImprovementHandoffLink {
     public static func chatURL(_ id: UUID) -> URL {URL(string:"codex://threads/\(id.uuidString.lowercased())")!}
     public static func prompt(request: Improvement, handoff: ImprovementHandoff, application: ImprovementApplication) throws -> String {
         struct Input: Encodable {
-            let requestID: UUID, handoffID: UUID, text: String, context: String, sourceBuild: String, repository: String, originRepository: String?
+            let requestID: UUID, handoffID: UUID, text: String, context: String, sourceBuild: String, repository: String, originRepository: String?, destinationChatID: String?, destinationProjectID: String?
         }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted,.sortedKeys]
-        let data = Input(requestID:request.id,handoffID:handoff.id,text:request.text,context:request.context,sourceBuild:request.build,repository:handoff.repository,originRepository:handoff.originRepository)
+        let data = Input(requestID:request.id,handoffID:handoff.id,text:request.text,context:request.context,sourceBuild:request.build,repository:handoff.repository,originRepository:handoff.originRepository,destinationChatID:request.delivery?.destination.chatID,destinationProjectID:request.delivery?.destination.projectID)
         let body = String(decoding:try encoder.encode(data),as:UTF8.self)
         return """
         \(application.name) improvement — request \(request.id.uuidString)
-        The owner prepared this request in \(application.name) and pressed Send here in Codex.
+        The owner sent this request from \(application.name), or prepared it there and pressed Send in Codex.
         Work in this chat and the destination repository in the JSON below. Follow applicable
         AGENTS.md and machine policy; read \(application.instructionsPath) if present.
         Do not start other agents or pick up saved backlog.
@@ -39,7 +39,9 @@ public enum ImprovementHandoffLink {
 
         First link THIS chat back to the request, before investigating or changing code:
         1. Obtain the current chat UUID from the single non-secret CODEX_THREAD_ID environment
-           variable supplied by the executor. Do not dump the environment, read authentication
+           variable supplied by the executor. If destinationChatID is present in the JSON,
+           it must match this current chat before linking. Do not substitute another ID.
+           Do not dump the environment, read authentication
            state, guess an ID, or copy a different chat's ID.
         2. Call the repository's \(application.callbackCommand) improvement-link with these arguments:
            --improvement \(request.id.uuidString) --handoff \(handoff.id.uuidString)

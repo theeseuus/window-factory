@@ -1,6 +1,6 @@
 # Window Factory CLI
 
-Version: 1.10
+Version: 1.11
 Updated: 2026-11-01
 
 `scripts/window-factory` (or the installed binary with `--cli`) provides JSON access to the running app's layout, application, tiling and direct window operations.
@@ -230,56 +230,53 @@ the report. Inspect it before another move; do not blindly retry a failed move
 because its first stage may already have completed.
 
 
-## Improvement requests and manual Codex handoff
+## Improvement requests and direct Codex connection
 
-These commands require the running app's Agent access. They take no display or
-Space context and do not accept `--wait`. They do not launch a model. Preparation
-writes the clipboard explicitly; opening additionally navigates to a mode-only
-Codex composer. The owner selects/creates the project, starts a new chat, pastes
-and sends there. See [the UI workflow](docs/improvements.md).
+The running app owns the request catalog, setup and dispatch for both UI and CLI.
+Codex desktop must be running. These commands need no display/Space or --wait.
+Desktop/setup calls have a bounded 45-second client response timeout. Source is
+configured once with improvement-agent --repository; direct destination setup
+selects actual server project/chat IDs, not folder labels or legacy sidebar IDs.
+The provider context is desktop/default, separate from codex-ai/codex-dev.
 
-| Command | Result and behavior |
+| Command | Behavior |
 | --- | --- |
-| `improvement-agent [--repository PATH] [--destination PATH|app]` | Read/configure origin and destination. Source validates as Window Factory; destination validates as an existing folder. `app` resets to origin. The old `--codex-project ID` setting is retained for compatibility and is not needed for manual preparation. |
-| `improvement-prepare --improvement UUID` | Prepare and copy the callback-capable prompt; open nothing. |
-| `improvement-open --improvement UUID` | Prepare/copy and open a mode-only Codex composer. If linked, open its existing chat without copying another task. |
-| `improvement-create-project --destination NEW_FOLDER` | Explicitly create an absent local folder and initialize Git through the owner Git tool, then select it as destination. Never replace, commit, publish or register Codex projects automatically. |
-| `improvement-link --improvement UUID --handoff UUID --thread UUID` | Agent callback links its actual current coding chat after workspace/project checks. |
-| `improvements [--improvement UUID | --offset N]` | Read full record or summaries (at most 100 per page), with total count. |
-| `improvement-submit --text TEXT [--context TEXT]` | Save only; stable ID comes from `--request-id`. |
-| `improvement-update --improvement UUID --revision N --state STATE --note TEXT [--target-build N]` | Append an idempotent, revision-checked note. |
+| `improvement-codex-projects` | List actual Codex server projects and repository roots. |
+| `improvement-codex-chats --codex-project SERVER_UUID` | List assigned chats and clearly marked legacy/unfiled chats matching the project's roots. |
+| `improvement-connect --codex-project SERVER_UUID --thread CHAT_UUID [--confirm]` | Verify and persist the chosen destination. --confirm explicitly assigns an unfiled chat; a chat belonging to another project is rejected. |
+| `improvement-disconnect` | Reset direct setup for future sends. Existing request destinations and links remain. |
+| `improvement-codex-create-project --name NAME --repository PATH --request-id UUID` | Ask Codex to register an existing repository. Its idempotency key prevents duplicate creation on identical retries. |
+| `improvement-create-project --destination NEW_FOLDER --request-id UUID` | Create an absent local folder and initialize Git through the owner tool. Does not itself register a provider project, commit or publish. |
+| `improvement-codex-new-chat --codex-project SERVER_UUID --repository ROOT --request-id UUID` | Create an empty project-bound chat. A private setup journal preserves its receipt; unconfirmed creation is never automatically repeated. |
+| `improvement-submit --text TEXT [--context TEXT] [--request-id UUID]` | Save only, with the original version/build and text. |
+| `improvement-send --improvement UUID [--request-id UUID]` | Send to the saved verified destination, opening only that exact chat. Return an accepted chat/turn/message receipt; use no clipboard or second Send. |
+| `improvements [--improvement UUID | --offset N]` | Read a complete record or visible summaries (100/page). Direct reads include removed notes for callbacks/recovery. |
+| `improvement-remove --improvement UUID --confirm` | Hide a local note while retaining original/history and late callbacks. Does not delete chats or cancel work. |
+| `improvement-link --improvement UUID --handoff UUID --thread UUID` | Agent callback links its genuine chat. A direct request must match the selected chat; multiple direct requests may use one chosen chat. |
+| `improvement-update --improvement UUID --revision N --state STATE --note TEXT [--target-build N]` | Append an idempotent revision-checked outcome. Revision is updates.count. |
+| `improvement-agent [--repository PATH] [--destination PATH|app]` | Read configuration or set the origin/manual fallback folder. Changing the origin or manual destination clears direct setup. |
+| `improvement-prepare --improvement UUID` / `improvement-open --improvement UUID` | Legacy manual clipboard preparation/open; retained for compatibility, not used by normal direct Send. |
 
-States are queued, working, needs-input, implemented and declined. Implemented
-requires a positive target build; other states omit it. A separate destination's
-implementation is not described as installed in the origin app. The actual chat
-links before product work, and a thread cannot silently replace an existing link
-or belong to two different requests. The old `improvement-dispatch` returns
-`background_dispatch_disabled`; no background model route is enabled.
+Use --request-id UUID for stable write IDs; preserve every ID and payload during
+retries. A direct request's delivery field records destination, stable messageID,
+phase and accepted receipt. A write-ahead submitting/unconfirmed state is never
+blindly retried after restart. If the actual chat links back, that callback proves
+arrival even when the transport receipt was lost. Check the chat and original
+record rather than creating duplicate requests to work around uncertainty.
 
-Manual preparation uses handoff phase `prepared` and preserves unlinked tokens on
-recopy, including old automatic preparations. Opening failure keeps a copied token
-usable. Different destinations conflict rather than silently retargeting a saved
-preparation. `improvementRoute`, when returned by open, describes actual mode-only
-navigation and omits destination/request data; it does not prove task creation.
+Sending a second improvement to a chat with running/unconfirmed work reports
+codex_chat_busy. Removed running notes still protect that chat. Disconnect or
+connection changes affect future requests; they do not retarget existing attempts.
 
-For project creation, generate one `--request-id` and preserve it on retry. The
-running app remembers successful creation IDs and never repeats that initialization
-or overwrites an existing folder. After restart, an existing folder is reported
-as `project_exists`; inspect it and select it explicitly rather than recreating
-it. Initializer failure preserves the partial folder. A disabled-access or lost
-response may follow completed work: inspect before retrying. Existing local repo
-creation and clipboard actions share their backend with the UI.
+New project/chat creation and explicit legacy assignment are fixture-tested;
+desktop sidebar visibility is a separate live acceptance check. An unavailable
+chat owner/runtime, unsupported protocol, project mismatch, missing setup or
+unconfirmed delivery returns a structured error. There is no daemon, GUI click
+simulation, account/config request or credential inspection. Normal approval
+handling applies to the agent's same-user app callbacks.
 
-The installed app's absolute executable/`--cli` callback is included in the copied
-prompt, so a separate destination does not need the origin app's scripts. Use only
-the actual current `CODEX_THREAD_ID` value; do not dump environment/authentication
-state or borrow a different chat ID. `updates.count` is the numeric revision.
-For sandbox-denied local IPC, use normal approval and one identical retry. Rejected
-review or failed linking stops product work; callback delivery failure must remain
-visible in the coding chat without pretending the app received it.
-
-Request text is bounded at 8,000 UTF-8 bytes, context at 1,000 and notes at 8,000.
-Private schema-1 catalogs are preserved on decode/validation failure. Original text,
-source build and context stay intact; updates append. Agent setup does not enable
-access, change macOS grants, register a Codex project, install/restart the app,
-select credentials or publish. Legacy build-58 run receipts remain recovery-only.
+Background improvement-dispatch remains disabled. Legacy worker receipts can be
+reconciled but never restart a worker. Request text is bounded to 8,000 UTF-8 bytes,
+context to 1,000 and notes to 8,000. Implemented requires a positive target build.
+The installed app's absolute callback command works from separate projects;
+completion remains distinct from installation and owner acceptance.

@@ -20,12 +20,12 @@ enum AgentSocket {
         withUnsafeMutableBytes(of:&addr.sun_path) { buffer in buffer.copyBytes(from:bytes) }
         addr.sun_len=UInt8(MemoryLayout<sockaddr_un>.size);return addr
     }
-    static func timeouts(_ fd: Int32) {
+    static func timeouts(_ fd: Int32, seconds:Int=3) {
         // Darwin accept inherits the listener's O_NONBLOCK flag. Request/reply
         // streams need blocking I/O so the bounded socket timeouts can apply.
         let flags=fcntl(fd,F_GETFL)
         if flags>=0 { _=fcntl(fd,F_SETFL,flags & ~O_NONBLOCK) }
-        var timeout=timeval(tv_sec:3,tv_usec:0),yes:Int32=1
+        var timeout=timeval(tv_sec:seconds,tv_usec:0),yes:Int32=1
         _=setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,socklen_t(MemoryLayout<timeval>.size))
         _=setsockopt(fd,SOL_SOCKET,SO_SNDTIMEO,&timeout,socklen_t(MemoryLayout<timeval>.size))
         _=setsockopt(fd,SOL_SOCKET,SO_NOSIGPIPE,&yes,socklen_t(MemoryLayout<Int32>.size))
@@ -59,11 +59,11 @@ enum AgentSocket {
             guard n>0 else { throw failure("Write request") };offset+=n
         }
     }
-    static func exchange(_ request: Data,path: String = path) throws -> Data {
+    static func exchange(_ request: Data,path: String = path,responseTimeout:Int=3) throws -> Data {
         try owned((path as NSString).deletingLastPathComponent,type:S_IFDIR,mode:0o700)
         try owned(path,type:S_IFSOCK,mode:0o600)
         let fd=socket(AF_UNIX,SOCK_STREAM,0);guard fd>=0 else { throw failure("Create client") };defer{close(fd)}
-        timeouts(fd);var addr=try address(path)
+        timeouts(fd,seconds:responseTimeout);var addr=try address(path)
         let connected=withUnsafePointer(to:&addr){pointer in pointer.withMemoryRebound(to:sockaddr.self,capacity:1){Darwin.connect(fd,$0,socklen_t(MemoryLayout<sockaddr_un>.size))}}
         guard connected==0 else { throw failure("Connect to Window Factory") }
         try peer(fd);try send(fd,request);return try receive(fd)

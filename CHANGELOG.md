@@ -1,5 +1,22 @@
 # Source baseline
 
+## 2026-11-01 — direct desktop project/chat connection, build 70
+
+Connect Improvements to actual Codex desktop projects and coding chats through
+one shared UI/CLI backend. Persist setup, support explicit unfiled-chat assignment,
+project/empty-chat creation, direct Send and exact chat/turn receipts. Keep a
+write-ahead delivery journal and never automatically repeat unconfirmed sends.
+Reuse a chosen chat sequentially; prevent interruption of another in-flight or
+uncertain improvement. Remove stale notes from the list while preserving history
+and late callbacks. Keep existing requests and legacy CLI preparation compatible.
+
+The connector's bounded desktop-context proof listed real projects and delivered
+a no-code marker to an existing desktop chat without clipboard or a second Send.
+Project/chat sidebar visibility and consumer outcome callbacks need live checks.
+Remove a redundant Foundation wait from local folder creation after a fixture
+sample demonstrated a run-loop stall. Keep process deadlines bounded.
+
+
 ## 2026-11-01 — explicit manual project handoff, build 69
 
 Adopt the owner-selected prepare/copy, choose/create project in Codex, paste/send

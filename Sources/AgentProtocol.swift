@@ -7,6 +7,14 @@ enum AgentCommand: String, Codable, CaseIterable {
   case improvementAgent = "improvement-agent"
   case improvementDispatch = "improvement-dispatch"
   case improvementOpen = "improvement-open"
+  case improvementCodexCreateProject = "improvement-codex-create-project"
+  case improvementCodexNewChat = "improvement-codex-new-chat"
+  case improvementCodexProjects = "improvement-codex-projects"
+  case improvementCodexChats = "improvement-codex-chats"
+  case improvementConnect = "improvement-connect"
+  case improvementDisconnect = "improvement-disconnect"
+  case improvementSend = "improvement-send"
+  case improvementRemove = "improvement-remove"
   case improvementPrepare = "improvement-prepare"
   case improvementCreateProject = "improvement-create-project"
   case improvementLink = "improvement-link"
@@ -103,6 +111,23 @@ struct AgentRequest: Codable, Equatable {
     if offset != nil { supplied.insert("offset") }
     let allowed: Set<String>
     switch command {
+    case .improvementCodexCreateProject:
+      allowed = ["name","repository"]
+      guard let name,!name.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty,name.utf8.count<=200,repository?.hasPrefix("/")==true else {throw AgentFailure("invalid_arguments","Supply a project name and absolute existing repository.")}
+    case .improvementCodexNewChat:
+      allowed = ["codexProjectID","repository"]
+      guard codexProjectID.flatMap(UUID.init(uuidString:)) != nil,repository?.hasPrefix("/")==true else {throw AgentFailure("invalid_arguments","Supply the actual server project and repository root.")}
+    case .improvementCodexProjects,.improvementDisconnect:
+      allowed = []
+    case .improvementCodexChats:
+      allowed = ["codexProjectID"]
+      guard codexProjectID.flatMap(UUID.init(uuidString:)) != nil else {throw AgentFailure("invalid_arguments","Supply --codex-project with an actual server project UUID.")}
+    case .improvementConnect:
+      allowed = ["codexProjectID","threadID","confirm"]
+      guard codexProjectID.flatMap(UUID.init(uuidString:)) != nil, threadID != nil else {throw AgentFailure("invalid_arguments","Supply the server project UUID and chosen chat UUID. --confirm explicitly assigns an unfiled chat.")}
+    case .improvementRemove:
+      allowed = ["improvementID","confirm"]
+      guard improvementID != nil, confirm == true else {throw AgentFailure("confirmation_required","Supply the request UUID and --confirm to remove its note from the list. This does not delete the Codex chat or cancel work.")}
     case .improvementAgent:
       allowed = ["repository", "codexProjectID", "destinationRepository"]
       if let destinationRepository, destinationRepository != "app" && (!destinationRepository.hasPrefix("/") || destinationRepository.utf8.count > 4096) {
@@ -125,7 +150,7 @@ struct AgentRequest: Codable, Equatable {
       guard let destinationRepository, destinationRepository.hasPrefix("/"), destinationRepository.utf8.count <= 4096 else {
         throw AgentFailure("invalid_destination", "Supply an absolute new project-folder path.")
       }
-    case .improvementDispatch, .improvementOpen, .improvementPrepare:
+    case .improvementDispatch, .improvementOpen, .improvementPrepare, .improvementSend:
       allowed = ["improvementID"]
       guard improvementID != nil else {throw AgentFailure("invalid_improvement", "Supply an improvement ID.")}
     case .improvements:
@@ -350,6 +375,9 @@ struct AgentTiling: Codable {
 struct AgentToolResult: Codable {
   var apps: [AgentApp]?, tiling: AgentTiling?, catalog: Catalog?, names: [String]?
   var improvementAgent: ImprovementAgentConfiguration?
+  var codexProject: CodexProject?, codexChat: CodexChat?
+  var codexProjects: [CodexProject]?, codexChats: [CodexChat]?
+  var codexDestination: CodexDestination?, codexReceipt: CodexSendReceipt?
   var improvementRoute: ImprovementRouteDiagnostic?
   var improvement: Improvement?, improvements: [ImprovementSummary]?, improvementCount: Int?
   var display: UInt32?, space: UInt64?

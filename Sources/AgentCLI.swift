@@ -5,6 +5,16 @@ enum AgentCLI {
     static let help = """
     Window Factory CLI (JSON; running app and Agent access required)
       window-factory status | capabilities | layouts | apps | tiling-status | layout-export
+      window-factory improvement-codex-create-project --name NAME --repository PATH --request-id UUID
+      window-factory improvement-codex-new-chat --codex-project SERVER_UUID --repository PATH --request-id UUID
+      window-factory improvement-codex-projects
+      window-factory improvement-codex-chats --codex-project SERVER_UUID
+      window-factory improvement-connect --codex-project SERVER_UUID --thread CHAT_UUID [--confirm]
+        Connect uses the desktop context; --confirm explicitly assigns an unfiled repository chat.
+      window-factory improvement-disconnect
+      window-factory improvement-send --improvement UUID [--request-id UUID]
+      window-factory improvement-remove --improvement UUID --confirm
+        Direct send uses the saved chat, no clipboard or additional Send. Removal hides only the local note.
       window-factory improvement-agent [--repository PATH] [--destination PATH|app]
       window-factory improvement-prepare --improvement UUID
       window-factory improvement-create-project --destination NEW_FOLDER
@@ -97,7 +107,7 @@ enum AgentCLI {
     }
     static func exchange(_ request: AgentRequest) throws -> AgentResponse {
         let data=try JSONEncoder().encode(request)
-        do {return try AgentResponse.decode(AgentSocket.exchange(data))}
+        do {return try AgentResponse.decode(AgentSocket.exchange(data,responseTimeout:[.improvementCodexProjects,.improvementCodexChats,.improvementCodexCreateProject,.improvementCodexNewChat,.improvementConnect,.improvementSend,.improvementCreateProject].contains(request.command) ? 45 : 3))}
         catch {
             if !UserDefaults.standard.bool(forKey:"agentAccessEnabled") {throw AgentFailure("agent_disabled","Agent access is off. Enable it in Window Factory Settings → General.")}
             var info=stat()

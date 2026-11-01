@@ -32,9 +32,14 @@ public struct Improvement: Codable, Equatable, Identifiable {
     public var updates: [ImprovementUpdate] = []
     public var runs: [ImprovementRun]? = nil
     public var handoffs: [ImprovementHandoff]? = nil
+    public var delivery: ImprovementDelivery? = nil
+    public var removedAt: Date? = nil
     public var state: ImprovementState { updates.last?.state ?? .queued }
     public var revision: Int { updates.count }
     public func status(runningBuild: Int?) -> String {
+        if delivery?.phase == "prepared" {return "Ready to send to chosen Codex chat"}
+        if delivery?.phase == "submitting" {return "Sending to Codex…"}
+        if delivery?.phase == "unconfirmed" {return "Send unconfirmed — inspect chat"}
         if let run = runs?.last, run.active {return run.phase == "launching" ? "Starting agent…" : "Agent running"}
         if let handoff = handoffs?.last {
             if handoff.phase == "prepared", handoff.threadID == nil, ![.implemented,.declined].contains(state) {return "Prepared for Codex — paste and send"}
@@ -102,9 +107,9 @@ public final class ImprovementStore {
         try FileManager.default.setAttributes([.posixPermissions:0o600], ofItemAtPath:url.path)
         changed?()
     }
-    public func all() throws -> [Improvement] { try load().requests }
+    public func all(includeRemoved: Bool = false) throws -> [Improvement] { try load().requests.filter {includeRemoved || $0.removedAt == nil} }
     public func get(_ id: UUID) throws -> Improvement {
-        guard let value = try all().first(where:{$0.id == id}) else {
+        guard let value = try load().requests.first(where:{$0.id == id}) else {
             throw ImprovementFailure("improvement_not_found", "No improvement has that ID.")
         }
         return value
@@ -196,13 +201,58 @@ public final class ImprovementStore {
               ![.implemented,.declined].contains(catalog.requests[index].state) else {
             throw ImprovementFailure("request_finished", "This handoff is no longer awaiting a chat. Do not start another implementation.")
         }
-        guard !catalog.requests.contains(where:{$0.id != id && $0.handoffs?.contains(where:{$0.threadID == threadID}) == true}) else {
+        if let delivery=catalog.requests[index].delivery {
+            guard UUID(uuidString:delivery.destination.chatID) == threadID else {throw ImprovementFailure("request_conflict","This is not the selected destination chat.")}
+        }
+        guard catalog.requests[index].delivery != nil || !catalog.requests.contains(where:{$0.id != id && $0.handoffs?.contains(where:{$0.threadID == threadID}) == true}) else {
             throw ImprovementFailure("request_conflict", "This chat already belongs to another improvement request.")
         }
         catalog.requests[index].handoffs![link].threadID = threadID
         catalog.requests[index].handoffs![link].phase = "linked"
+        if var delivery=catalog.requests[index].delivery,delivery.receipt == nil {
+            delivery.phase="linked";catalog.requests[index].delivery=delivery
+        }
         catalog.requests[index].updates.append(ImprovementUpdate(id:UUID(),date:Date(),state:.working,note:"Codex chat linked. Work was started there by the owner. Open chat to follow or discuss the work.",targetBuild:nil))
         try save(catalog); return catalog.requests[index]
+    }
+    /// Hide a note locally; keep its immutable request/history for late callbacks.
+    public func removeFromList(_ id: UUID) throws {
+        var catalog=try load()
+        guard let i=catalog.requests.firstIndex(where:{$0.id==id}) else {throw ImprovementFailure("improvement_not_found","No improvement has that ID.")}
+        if catalog.requests[i].removedAt == nil {catalog.requests[i].removedAt=Date();try save(catalog)}
+    }
+    public func prepareDelivery(_ id: UUID,destination: CodexDestination,operationID: UUID,originRepository: String) throws -> ImprovementDelivery {
+        let original=try get(id)
+        if let delivery=original.delivery {
+            guard delivery.destination == destination else {throw ImprovementFailure("request_conflict","This request already has another destination.")}
+            return delivery
+        }
+        guard original.removedAt == nil, original.handoffs?.contains(where:{$0.threadID != nil}) != true,
+              original.runs?.contains(where:{$0.active}) != true else {throw ImprovementFailure("request_conflict","This request is removed, linked or already running.")}
+        let handoff=try prepareHandoff(id,handoffID:operationID,repository:destination.repository,manual:true,originRepository:originRepository)
+        var catalog=try load();let i=catalog.requests.firstIndex(where:{$0.id==id})!
+        let delivery=ImprovementDelivery(id:handoff.id,destination:destination,messageID:operationID,phase:"prepared",receipt:nil)
+        catalog.requests[i].delivery=delivery;try save(catalog);return delivery
+    }
+    public func beginDelivery(_ id: UUID) throws -> ImprovementDelivery {
+        var catalog=try load()
+        guard let i=catalog.requests.firstIndex(where:{$0.id==id}),var delivery=catalog.requests[i].delivery else {throw ImprovementFailure("handoff_not_found","Prepare this request first.")}
+        guard delivery.phase == "prepared", catalog.requests[i].removedAt == nil, ![.implemented,.declined].contains(catalog.requests[i].state) else {throw ImprovementFailure("codex_delivery_unconfirmed","This send was already attempted. Inspect its existing chat; do not send it again.")}
+        delivery.phase="submitting";catalog.requests[i].delivery=delivery;try save(catalog);return delivery
+    }
+    public func finishDelivery(_ id: UUID,receipt: CodexSendReceipt?) throws {
+        var catalog=try load()
+        guard let i=catalog.requests.firstIndex(where:{$0.id==id}),var delivery=catalog.requests[i].delivery else {throw ImprovementFailure("handoff_not_found","No delivery exists.")}
+        if let receipt {
+            guard receipt.messageID == delivery.messageID,receipt.chatID == delivery.destination.chatID else {throw ImprovementFailure("request_conflict","The delivery receipt does not match its request.")}
+            if let prior=delivery.receipt {guard prior == receipt else {throw ImprovementFailure("request_conflict","A different receipt already exists.")};return}
+            guard ["submitting","linked"].contains(delivery.phase) else {throw ImprovementFailure("request_conflict","This request is not being sent.")}
+            delivery.phase="accepted";delivery.receipt=receipt
+        } else if delivery.receipt == nil {
+            delivery.phase = catalog.requests[i].handoffs?.contains(where:{$0.id==delivery.id && $0.threadID==UUID(uuidString:delivery.destination.chatID)}) == true ? "linked" : "unconfirmed"
+        }
+        catalog.requests[i].delivery=delivery;try save(catalog)
+        if let receipt { _ = try linkChat(id,handoffID:delivery.id,threadID:UUID(uuidString:receipt.chatID)!)}
     }
     public func markRunStarted(_ requestID: UUID, runID: UUID, sessionID: String?) throws {
         var catalog = try load()

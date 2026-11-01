@@ -69,7 +69,7 @@ final class AgentService {
             case .apps,.tilingStatus,.layoutExport:
                 payload.tools=try await backend.toolQuery(decoded)
                 guard enabled else{throw AgentFailure("agent_disabled","Agent access was disabled.")}
-            case .improvements, .improvementSubmit, .improvementUpdate, .improvementAgent, .improvementDispatch, .improvementOpen, .improvementLink, .improvementPrepare, .improvementCreateProject:
+            case .improvementCodexCreateProject, .improvementCodexNewChat, .improvementCodexProjects, .improvementCodexChats, .improvementConnect, .improvementDisconnect, .improvementSend, .improvementRemove, .improvements, .improvementSubmit, .improvementUpdate, .improvementAgent, .improvementDispatch, .improvementOpen, .improvementLink, .improvementPrepare, .improvementCreateProject:
                 guard let improvementOperation else {throw AgentFailure("unavailable", "Improvement store unavailable.")}
                 payload.tools = try await improvementOperation(decoded)
                 guard enabled else {throw AgentFailure("agent_disabled", "Agent access was disabled; inspect any completed project creation before retrying.")}

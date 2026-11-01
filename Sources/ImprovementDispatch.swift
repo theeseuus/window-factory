@@ -25,6 +25,7 @@ struct ImprovementAgentConfiguration: Codable, Equatable {
     let runner: String
     let codexProjectID: String?
     let destinationRepository: String?
+    var desktopDestination: CodexDestination?
     init(repository: String? = nil, codexProjectID: String? = nil, destinationRepository: String? = nil) {
         self.repository = repository; self.codexProjectID = codexProjectID; self.destinationRepository = destinationRepository; runner = "codex-desktop"
     }
@@ -62,9 +63,16 @@ final class ImprovementDispatcher {
     let store: ImprovementStore
     let directory: URL
     var changed: (() -> Void)?
+    var desktopReady: (CodexDestination) async throws -> Void = {try await CodexDesktop().checkReady($0)}
+    var desktopCreate: (String,String,UUID) async throws -> CodexProject = {try await CodexDesktop().createProject(name:$0,repository:$1,operationID:$2)}
+    var desktopNewChat: (String,String) async throws -> CodexChat = {try await CodexDesktop().createChat(projectID:$0,repository:$1)}
+    var desktopProjects: () async throws -> [CodexProject] = {try await CodexDesktop().projects()}
+    var desktopChats: (String) async throws -> [CodexChat] = {try await CodexDesktop().chats(projectID:$0)}
+    var desktopSelect: (String,String,Bool) async throws -> CodexDestination = {try await CodexDesktop().select(projectID:$0,chatID:$1,assignUnfiledChat:$2)}
+    var desktopTransmit: (String,CodexDestination,UUID) async throws -> CodexSendReceipt = {try await CodexDesktop().send($0,to:$1,messageID:$2)}
     private var timer: Timer?
     private(set) var isCreatingProject = false
-    private var createdProjects: [UUID:String] = [:]
+    private var createdProjects: [UUID:(path:String,select:Bool)] = [:]
     var projectInitializer: @MainActor (String) async throws -> URL = {try await ImprovementProjectCreation.create($0)}
     let callbackCommand: String
     var copyPrompt: (String) -> Bool = {value in
@@ -102,7 +110,8 @@ final class ImprovementDispatcher {
         let previous = try configuration()
         // Repository changes invalidate the old binding; selecting the same repo preserves it.
         let binding = codexProjectID ?? (previous.repository == url.path ? previous.codexProjectID : nil)
-        let value = ImprovementAgentConfiguration(repository:url.path,codexProjectID:binding,destinationRepository:previous.destinationRepository)
+        var value = ImprovementAgentConfiguration(repository:url.path,codexProjectID:binding,destinationRepository:previous.destinationRepository)
+        if previous.repository == url.path {value.desktopDestination=previous.desktopDestination}
         try ImprovementFiles.write(value,to:configurationURL); changed?(); return value
     }
     func configureDestination(_ path: String?) throws -> ImprovementAgentConfiguration {
@@ -113,10 +122,10 @@ final class ImprovementDispatcher {
         let value = ImprovementAgentConfiguration(repository:previous.repository,codexProjectID:previous.codexProjectID,destinationRepository:destination)
         try ImprovementFiles.write(value,to:configurationURL); changed?(); return value
     }
-    func createProject(_ path: String, operationID: UUID = UUID()) async throws -> ImprovementAgentConfiguration {
+    func createProject(_ path: String, operationID: UUID = UUID(), selectAsDestination:Bool = true) async throws -> ImprovementAgentConfiguration {
         let canonical = ImprovementProjectCreation.newDestinationURL(path).path
         if let previous = createdProjects[operationID] {
-            guard previous == canonical else {throw AgentFailure("request_conflict", "This creation ID has another destination.")}
+            guard previous.path == canonical,previous.select == selectAsDestination else {throw AgentFailure("request_conflict", "This creation ID has another destination.")}
             return try configuration()
         }
         guard !isCreatingProject else {throw AgentFailure("project_creation_busy", "Wait for project creation to finish.")}
@@ -125,8 +134,8 @@ final class ImprovementDispatcher {
         do {
             let url = try await projectInitializer(canonical)
             isCreatingProject = false
-            let value = try configureDestination(url.path)
-            createdProjects[operationID] = url.path
+            let value = try selectAsDestination ? configureDestination(url.path) : configuration()
+            createdProjects[operationID] = (url.path,selectAsDestination)
             return value
         } catch {
             isCreatingProject = false; changed?(); throw error
@@ -152,6 +161,60 @@ final class ImprovementDispatcher {
         let prompt = try ImprovementHandoffLink.prompt(request:original,handoff:handoff,application:application)
         guard copyPrompt(prompt) else {throw AgentFailure("clipboard_unavailable", "The request is saved, but copying failed. Try preparing it again.")}
         changed?(); return try store.get(id)
+    }
+    func connectDesktop(projectID:String,chatID:String,assignUnfiled:Bool) async throws -> CodexDestination {
+        guard !isCreatingProject else {throw AgentFailure("project_creation_busy","Wait for project creation to finish.")}
+        let before=try configuration()
+        guard before.repository != nil else {throw AgentFailure("repository_required","Choose the app's source repository first.")}
+        let selected=try await desktopSelect(projectID,chatID,assignUnfiled)
+        guard try configuration() == before else {throw AgentFailure("request_conflict","Connection settings changed during verification. Run setup again.")}
+        var config=before;config.desktopDestination=selected
+        try ImprovementFiles.write(config,to:configurationURL);changed?();return selected
+    }
+    private struct ChatCreation: Codable {
+        let projectID:String, repository:String
+        var chat:CodexChat?
+    }
+    func createDesktopChat(projectID:String,repository:String,operationID:UUID) async throws -> CodexChat {
+        let url=store.url.deletingLastPathComponent().appendingPathComponent("improvement-codex-operations").appendingPathComponent(operationID.uuidString+".json")
+        if FileManager.default.fileExists(atPath:url.path) {
+            let previous=try ImprovementFiles.read(ChatCreation.self,from:url)
+            guard previous.projectID==projectID,previous.repository==repository else {throw AgentFailure("request_conflict","This creation ID has another destination.")}
+            guard let chat=previous.chat else {throw AgentFailure("codex_creation_unconfirmed","An earlier chat creation did not return a receipt. Inspect Codex before creating another chat.")}
+            return chat
+        }
+        try ImprovementFiles.write(ChatCreation(projectID:projectID,repository:repository,chat:nil),to:url)
+        let chat=try await desktopNewChat(projectID,repository)
+        try ImprovementFiles.write(ChatCreation(projectID:projectID,repository:repository,chat:chat),to:url)
+        return chat
+    }
+    func disconnectDesktop() throws {
+        var config=try configuration();config.desktopDestination=nil
+        try ImprovementFiles.write(config,to:configurationURL);changed?()
+    }
+    func sendDirect(_ id:UUID,operationID:UUID=UUID()) async throws -> CodexSendReceipt {
+        guard !isCreatingProject else {throw AgentFailure("project_creation_busy","Wait for project creation to finish.")}
+        let config=try configuration()
+        guard let origin=config.repository,let destination=config.desktopDestination else {throw AgentFailure("codex_setup_required","Set up the Codex connection and choose a project/chat first.")}
+        _ = try ImprovementRepository.validate(origin)
+        try reconcile()
+        guard !(try store.all()).contains(where:{$0.runs?.contains(where:{$0.active}) == true}) else {throw AgentFailure("agent_busy","A legacy run is active.")}
+        func checkOtherWork() throws {
+            let busy=try store.all(includeRemoved:true).contains {record in
+                let sameChat=record.delivery?.destination.chatID == destination.chatID || record.handoffs?.contains(where:{$0.threadID == UUID(uuidString:destination.chatID)}) == true
+                return record.id != id && sameChat && (record.state == .working || ["submitting","unconfirmed"].contains(record.delivery?.phase ?? ""))
+            }
+            guard !busy else {throw AgentFailure("codex_chat_busy","Another improvement is still in progress or unconfirmed in this chat. Resolve it before sending another request there.")}
+        }
+        try checkOtherWork()
+        // Opening an exact existing chat loads its actual desktop writer; it carries
+        // no prompt/project payload and never creates a composer or sends keystrokes.
+        guard let chatID=UUID(uuidString:destination.chatID),openURL(ImprovementHandoffLink.chatURL(chatID)) else {throw AgentFailure("codex_open_failed","Could not open the chosen chat. Nothing was sent.")}
+        try await Task.sleep(for:.milliseconds(300))
+        try await desktopReady(destination) // Before the durable send-attempt marker.
+        try checkOtherWork() // Recheck after suspension; another send may have started.
+        let receipt=try await ImprovementDeliveryCoordinator.send(requestID:id,operationID:operationID,destination:destination,originRepository:origin,store:store,application:ImprovementApplication(name:"Window Factory",callbackCommand:callbackCommand),transmit:desktopTransmit)
+        changed?();return receipt
     }
     func reconcile(now: Date = Date()) throws {
         for request in try store.all() {
@@ -204,13 +267,30 @@ final class ImprovementDispatcher {
     }
     func openChat(_ id: UUID) throws {
         let value = try store.get(id)
-        guard let threadID = value.handoffs?.last(where:{$0.threadID != nil})?.threadID else {
+        guard let threadID = value.handoffs?.last(where:{$0.threadID != nil})?.threadID ?? value.delivery.flatMap({UUID(uuidString:$0.destination.chatID)}) else {
             throw AgentFailure("chat_not_linked", "No chat has linked back yet. Press Send in the prepared Codex chat first.")
         }
         guard openURL(ImprovementHandoffLink.chatURL(threadID)) else {throw AgentFailure("codex_open_failed", "Codex could not open the linked chat.")}
     }
     func handle(_ request: AgentRequest) async throws -> AgentToolResult {
         switch request.command {
+        case .improvementCodexCreateProject:
+            return AgentToolResult(codexProject:try await desktopCreate(request.name!,request.repository!,request.id))
+        case .improvementCodexNewChat:
+            return AgentToolResult(codexChat:try await createDesktopChat(projectID:request.codexProjectID!,repository:request.repository!,operationID:request.id))
+        case .improvementCodexProjects:
+            return AgentToolResult(codexProjects:try await desktopProjects())
+        case .improvementCodexChats:
+            return AgentToolResult(codexChats:try await desktopChats(request.codexProjectID!))
+        case .improvementConnect:
+            return AgentToolResult(codexDestination:try await connectDesktop(projectID:request.codexProjectID!,chatID:request.threadID!.uuidString.lowercased(),assignUnfiled:request.confirm == true))
+        case .improvementDisconnect:
+            try disconnectDesktop();return AgentToolResult(improvementAgent:try configuration())
+        case .improvementSend:
+            let receipt=try await sendDirect(request.improvementID!,operationID:request.id)
+            return AgentToolResult(codexReceipt:receipt,improvement:try store.get(request.improvementID!))
+        case .improvementRemove:
+            try store.removeFromList(request.improvementID!);return AgentToolResult(improvement:try store.get(request.improvementID!))
         case .improvementAgent:
             var config = try request.repository.map {try configure(repository:$0,codexProjectID:request.codexProjectID)} ?? configuration()
             if let destination = request.destinationRepository {config = try configureDestination(destination == "app" ? nil : destination)}

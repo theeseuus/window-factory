@@ -9,12 +9,16 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
     private let projectPicker = NSPopUpButton(frame:.zero,pullsDown:false)
     private let agentLabel = NSTextField(wrappingLabelWithString:"")
     private let openChatButton = NSButton(title:"Open chat",target:nil,action:nil)
-    private let sendSelectedButton = NSButton(title:"Copy selected & open…",target:nil,action:nil)
+    private let sendSelectedButton = NSButton(title:"Send selected",target:nil,action:nil)
+    private let connectionButton=NSButton(title:"Connection…",target:nil,action:nil)
+    private let removeButton=NSButton(title:"Remove from list…",target:nil,action:nil)
+    private var connectionWindow:CodexConnectionWindow?
+    private var sending:Set<UUID>=[]
     private let input = NSTextView()
     private let contextField = NSTextField(string:"")
     private let table = NSTableView()
     private let detail = NSTextView()
-    private let message = NSTextField(wrappingLabelWithString:"Choose a destination, then copy the request. In Codex, select or create that project, start a new chat, paste and send.")
+    private let message = NSTextField(wrappingLabelWithString:"Set up your Codex project and chat once. Then save requests for later or send them directly.")
     private let copyButton = NSButton(title:"Copy selected request for agent", target:nil, action:nil)
     private var rows: [Improvement] = []
     private var draftID = UUID()
@@ -36,14 +40,15 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         let build = NSTextField(labelWithString:"Window Factory \(store.version) · Build \(store.build)")
         build.textColor = .secondaryLabelColor
         let save = NSButton(title:"Save for later",target:self,action:#selector(saveForLater)); save.bezelStyle = .rounded
-        let send = NSButton(title:"Copy & open Codex…",target:self,action:#selector(sendNow)); send.bezelStyle = .rounded
+        let send = NSButton(title:"Send to Codex",target:self,action:#selector(sendNow)); send.bezelStyle = .rounded
         send.isEnabled = dispatcher != nil
         let actions = NSStackView(views:[build,NSView(),save,send]); actions.spacing = 12
         agentLabel.textColor = .secondaryLabelColor; agentLabel.font = .systemFont(ofSize:12)
         projectPicker.target = self; projectPicker.action = #selector(destinationChosen)
         projectPicker.setAccessibilityLabel("Destination project")
         let projectLabel = NSTextField(labelWithString:"Destination:")
-        let agentRow = NSStackView(views:[projectLabel,projectPicker,agentLabel]); agentRow.spacing = 8
+        connectionButton.target=self;connectionButton.action=#selector(showConnection);connectionButton.bezelStyle = .rounded
+        let agentRow = NSStackView(views:[projectLabel,agentLabel,NSView(),connectionButton]); agentRow.spacing = 8
         projectPicker.setContentHuggingPriority(.defaultHigh,for:.horizontal)
         let historyLabel = NSTextField(labelWithString:"Previous requests")
         historyLabel.font = .systemFont(ofSize:14,weight:.semibold)
@@ -59,7 +64,8 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         sendSelectedButton.target = self; sendSelectedButton.action = #selector(sendSelected); sendSelectedButton.bezelStyle = .rounded
         openChatButton.target = self; openChatButton.action = #selector(openLinkedChat); openChatButton.bezelStyle = .rounded
         copyButton.title = "Copy prepared request"
-        let footer = NSStackView(views:[openChatButton,sendSelectedButton,copyButton,refresh]); footer.spacing = 8
+        removeButton.target=self;removeButton.action=#selector(removeSelected);removeButton.bezelStyle = .rounded
+        let footer = NSStackView(views:[openChatButton,sendSelectedButton,removeButton,refresh]); footer.spacing = 8
         let stack = NSStackView(views:[prompt,hint,inputScroll,contextLabel,contextField,actions,agentRow,message,historyLabel,history,detailScroll,footer])
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false; window.contentView!.addSubview(stack)
@@ -93,6 +99,7 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         if input.string.isEmpty { contextField.stringValue = context }
         refreshHistory(); window.center(); window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(input); NSApp.activate(ignoringOtherApps:true)
+        if (try? dispatcher?.configuration().desktopDestination) == nil {showConnection()}
     }
     private func saveDraft() throws -> Improvement {
         let value = try store.submit(id:draftID,text:input.string,context:contextField.stringValue,source:"ui")
@@ -115,15 +122,45 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
         guard let selected, let dispatcher else {return}
         do {try dispatcher.openChat(selected.id)} catch {message.stringValue = error.localizedDescription}
     }
-    private func send(_ id: UUID) {
+    @objc private func showConnection() {
         guard let dispatcher else {return}
-        do {
-            if try dispatcher.configuration().repository == nil, !pickRepository() {
-                message.stringValue = "Saved for later. Choose the app's source project before preparing a request."; return
-            }
-            _ = try dispatcher.openRequest(id)
-            message.stringValue = "Copied. In Codex, select or create the destination project, start a NEW chat there, paste (⌘V), choose the model and press Send."
-        } catch {message.stringValue = error.localizedDescription}
+        if (try? dispatcher.configuration().repository) == nil, !pickRepository() {return}
+        if connectionWindow == nil {
+            let setup=CodexConnectionWindow(dispatcher:dispatcher)
+            setup.connected = { [weak self] in self?.message.stringValue="Connected. New requests go directly to the chosen Codex chat.";self?.reloadHistory() }
+            connectionWindow=setup
+        }
+        if let setup=connectionWindow {
+            setup.window.level=window.level
+            setup.window.collectionBehavior=[.moveToActiveSpace]
+            if setup.window.parent !== window {window.addChildWindow(setup.window,ordered:.above)}
+            setup.show()
+        }
+    }
+    private func send(_ id: UUID) {
+        guard let dispatcher,!sending.contains(id) else {return}
+        guard (try? dispatcher.configuration().desktopDestination) != nil else {
+            message.stringValue="Saved. Set up the Codex connection, then send this request.";showConnection();return
+        }
+        sending.insert(id);message.stringValue="Sending to the chosen Codex chat…";reloadHistory()
+        Task { @MainActor [weak self] in
+            guard let self else {return}
+            do {
+                let receipt=try await dispatcher.sendDirect(id)
+                message.stringValue="Sent to Codex. The linked chat reports progress and the outcome here."
+                _ = dispatcher.openURL(ImprovementHandoffLink.chatURL(UUID(uuidString:receipt.chatID)!))
+            } catch {message.stringValue=error.localizedDescription}
+            sending.remove(id);reloadHistory()
+        }
+    }
+    @objc private func removeSelected() {
+        guard let selected else {return}
+        let alert=NSAlert();alert.messageText="Remove this note from the list?"
+        alert.informativeText="Its Codex chat and any running work continue. Request history is retained for late outcome updates."
+        alert.addButton(withTitle:"Remove from list");alert.addButton(withTitle:"Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else {return}
+        do {try store.removeFromList(selected.id);message.stringValue="Removed from this list. The Codex chat was preserved."}
+        catch {message.stringValue=error.localizedDescription}
         reloadHistory()
     }
     @objc private func destinationChosen() {
@@ -219,7 +256,7 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
             projectPicker.menu?.autoenablesItems = false
             projectPicker.isEnabled = dispatcher != nil && dispatcher?.isCreatingProject == false
             let destination = config?.destinationRepository ?? config?.repository
-            agentLabel.stringValue = dispatcher?.isCreatingProject == true ? "Creating…" : "Select/create it in Codex · paste & send"
+            agentLabel.stringValue = config?.desktopDestination.map {"Codex · \($0.projectName)"} ?? "Not connected"
             agentLabel.toolTip = destination ?? "Choose the app's source project"
             projectPicker.toolTip = destination ?? "App project has not been configured"
             rows = try store.all().reversed(); table.reloadData()
@@ -234,11 +271,15 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
     private func description(_ value: Improvement) -> String {
         var text = "\(value.status(runningBuild:Int(store.build)))\n\(value.createdAt.formatted()) · Build \(value.build)\n\n\(value.text)"
         if !value.context.isEmpty {text += "\n\nContext: \(value.context)"}
+        if let delivery=value.delivery {
+            text += "\n\nCodex project: \(delivery.destination.projectName)\nChat: \(delivery.destination.chatID)\nDelivery: \(delivery.phase)"
+            if let receipt=delivery.receipt {text += "\nAccepted turn: \(receipt.turnID)"}
+        }
         for update in value.updates {text += "\n\n\(update.date.formatted()) — \(update.state.title)\n\(update.note)"}
         for handoff in value.handoffs ?? [] {
             text += "\n\nCodex handoff · \(handoff.phase)\nRepository: \(handoff.repository)"
             if let threadID = handoff.threadID {text += "\nChat: \(ImprovementHandoffLink.chatURL(threadID).absoluteString)"}
-            else if handoff.phase == "prepared" {text += "\nSelect/create this project in Codex, start a new chat, paste the copied request and send. The chat links back when the agent starts."}
+            else if handoff.phase == "prepared", value.delivery == nil {text += "\nSelect/create this project in Codex, start a new chat, paste the copied request and send. The chat links back when the agent starts."}
             else if handoff.phase == "opened" {text += "\nEarlier automatic handoff. Prepare this request again for manual paste/send."}
             if let origin = handoff.originRepository, origin != handoff.repository {text += "\nOrigin app project: \(origin)"}
         }
@@ -251,9 +292,10 @@ final class ImprovementsWindow: NSObject, NSTableViewDataSource, NSTableViewDele
     }
     private func showDetail() {
         copyButton.isEnabled = dispatcher != nil && selected.map {![.implemented,.declined].contains($0.state) && !($0.handoffs?.contains(where:{$0.threadID != nil}) ?? false) && !($0.runs?.last?.active ?? false)} == true
-        openChatButton.isEnabled = dispatcher != nil && selected?.handoffs?.contains(where:{$0.threadID != nil}) == true
+        openChatButton.isEnabled = dispatcher != nil && (selected?.handoffs?.contains(where:{$0.threadID != nil}) == true || selected?.delivery != nil)
+        removeButton.isEnabled = selected != nil
         sendSelectedButton.isEnabled = dispatcher != nil && selected.map {value in
-            ![.implemented,.declined].contains(value.state) && !(value.runs?.last?.active ?? false) && !(value.handoffs?.contains(where:{$0.threadID != nil}) ?? false)
+            ![.implemented,.declined].contains(value.state) && !(value.runs?.last?.active ?? false) && !(value.handoffs?.contains(where:{$0.threadID != nil}) ?? false) && value.delivery?.phase != "unconfirmed" && value.delivery?.phase != "submitting" && !sending.contains(value.id)
         } == true
         detail.string = selected.map(description) ?? (rows.isEmpty ? "No requests yet." : "Select a request to see its context and outcome.")
     }

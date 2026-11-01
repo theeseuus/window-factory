@@ -1,107 +1,100 @@
 # Improvement requests
 
-Version: 2.0
+Version: 2.1
 Updated: 2026-11-01
 
-## Application and coding chat
+## Setup once, then send
 
-Window Factory owns the original request, editable context, status history and
-reported outcome. Codex owns the coding chat and repository work. The default
-handoff is manual preparation, project selection and paste/send. Saved requests
-are not authorization to start work, and copying a request starts no model.
+Open **Improve this app…** from Window Factory's menu. First-run **Connection…**
+uses the current Codex desktop context. Load actual projects, choose a project
+and coding chat, and save the connection. Reopen Connection anytime to change it.
+Older chats with no recorded server project are labelled as unfiled repository
+matches: assigning one requires an explicit setup confirmation. A chat already
+filed in another project is never moved silently.
 
-Open **Improve this app…** from the app menu or menu-bar badge. Describe the result
-you want. The app records its source version/build and offers:
+Create offers a Codex project for an existing repository or a separate local
+folder/Git repository. New folders are never overwritten, committed or published;
+partial failures are preserved. **New chat…** requests an empty, project-bound
+coding chat and starts no model work. These creation paths have fixture coverage;
+desktop sidebar visibility still requires a live pilot. The project list uses
+server IDs, which differ from legacy desktop-tool IDs.
 
-- **Save for later**: save only.
-- **Copy & open Codex…**: save, prepare a callback token, copy the full request
-  prompt and open Codex without passing the request or project in the URL.
+After setup, describe an issue or feature and choose:
 
-In Codex, **select or create the matching project, start a new chat there, paste
-with ⌘V, choose the model and press Send**. The coding chat checks its actual
-working directory and saved-project membership before linking or product work.
-The initial Codex composer label is not proof of its execution context.
+- **Save for later** stores the original request and starts no work.
+- **Send to Codex** saves and sends directly to the chosen chat. The app opens
+  that exact chat so its desktop owner can receive the message, then follows
+  the accepted chat. There is no clipboard transfer or composer Send.
 
-For a saved request use **Copy prepared request** to copy without opening another
-composer, or **Copy selected & open…**. Once linked, **Open chat** returns to the
-actual coding chat; copying another task for that request is disabled.
+Saved requests offer **Send selected**. Accepted requests offer **Open chat**.
+The chat reports questions, blockers and outcomes beside the original request.
+The chosen chat's model and permissions are preserved. Changing the connection
+never silently retargets an already-prepared direct request.
 
-## Destination and creation choices
+## Delivery, concurrency and outcomes
 
-**Destination** defaults to **Window Factory (app project)**. The app source folder
-is configured once through **Set app source project…** and remains the origin of
-its request/version history. Selecting another destination does not reassign the
-origin app's code ownership.
+The shared Improvements module persists a stable message ID and write-ahead
+send marker before transmission. Accepted receipts retain exact chat and turn
+IDs. A receipt is delivery evidence, not implementation evidence. If a receipt
+is lost, the request is unconfirmed and must be inspected before another send;
+restarting or repeating a CLI command never automatically repeats that prompt.
+A matching coding-chat callback can confirm arrival even if transport lost its
+receipt. A second improvement cannot interrupt a running/unconfirmed improvement
+in the same chat; resolve it or choose another chat first.
 
-- **Choose existing project…** selects an existing local project folder.
-- **Create project… → Existing repository…** chooses a folder to select or add as
-  a Codex project. Its files are preserved.
-- **Create project… → New folder & repository…** creates a separate local folder
-  and initializes Git through the configured owner Git tool. It never replaces
-  an existing folder, makes a commit or publishes. A partial initialization is
-  preserved for inspection. Codex registration still happens in Codex's GUI.
+The actual chat must link back before product work. Outcome updates are append-only
+and revision-checked. Implemented means a validated local change awaiting its
+target build, not installed or owner-accepted. Separate-project outcomes are not
+compared to Window Factory's running build.
 
-The destination path is shown as a tooltip and in prepared-request details. When
-you paste, choose/select that folder in Codex. Preparing an already-prepared
-request for a different folder reports a conflict, preserving its earlier token
-and destination; save a new request for a different project instead of silently
-starting the same task elsewhere.
+**Remove from list…** hides a stale note while keeping its original request,
+chat link and history for late callbacks. It neither deletes the Codex chat nor
+cancels running work. Removed in-flight work still participates in concurrency
+checks. Direct ID reads and callbacks remain available after removal.
 
-The copied callback command uses the installed app's absolute executable, so it
-works even when a separate destination has no Window Factory scripts. Host setup
-never changes Codex credentials, identity routing, permission grants or trust.
+## CLI and headless operation
 
-## Truthful state and outcomes
+The window and same-user CLI call the same running-app dispatcher/store owner.
+Agent access must already be enabled by the owner. The Improvements window can
+remain closed; the Codex desktop app must be running. Direct send opens the exact
+chat, not the Improvements window, and never simulates clicks or types a prompt.
+See [CLI.md](../CLI.md) for JSON operations and exact flags.
 
-Manual handoffs say **Prepared for Codex — paste and send** until the actual coding
-chat links back. A successful callback records that chat UUID and changes the
-request to reported work in progress. This is a reported status, not a live model
-activity feed. Questions/blockers and outcomes return both to the chat and the app.
+The connection CLI can list projects/chats, configure/reset setup, create provider
+projects/chats, save requests, send, inspect receipts/history and remove stale
+notes. Creation and sends use stable --request-id UUIDs. Local client timeouts are
+45 seconds for desktop/setup calls. If a response is lost, inspect the request
+or creation receipt rather than submitting a fresh operation ID blindly.
 
-Implemented requires a positive target build and useful evidence in its note. For
-the origin app's repository, availability follows the running build number and
-still does not establish owner acceptance. For a separate destination, the app
-says **Implemented in destination project**; it does not compare that program's
-build number to Window Factory's or claim it is installed here.
+The callback command uses the installed app's absolute executable, so it works
+from a separate destination without Window Factory scripts. Numeric revision is
+`improvement.updates.count`.
 
-If copying fails, the request stays saved and preparation can be retried. If
-Codex cannot open, the already-copied prompt and callback token remain usable:
-open Codex manually and continue. Recopying an unlinked request keeps its token;
-linked requests always reopen their existing chat.
+If the tool sandbox blocks a local callback, request normal tool approval and
+retry the identical operation once, preserving all IDs/payload/revision. Stop
+before product work if linking review is rejected/unavailable or the approved
+retry fails. Apply the same bounded retry to reads/outcomes. Never edit the live
+catalog directly, change grants or claim an unconfirmed note was delivered.
 
-## Agent and CLI contract
+## Connection boundaries and compatibility
 
-The running app is the single store owner; UI and same-user CLI use the same
-backend. Agent access is an owner setting. See [CLI.md](../CLI.md) for operations.
-The agent links this current chat before product work and updates outcomes with
-`improvement-update`. Numeric revision is `improvement.updates.count`.
+The explicitly selected desktop context is separate from codex-ai and codex-dev.
+Metadata operations use the app's bundled runtime with an independent Improvements
+client identity and minimal environment; sends use the running app's actual
+chat owner over its owner-only local socket. There is no executor/MCP metadata
+impersonation, credential inspection/copy, account/config API, permission override,
+daemon, remote control or silent CLI-identity fallback. Codex protocol changes or
+an unavailable runtime/socket produce explicit errors. The connection is version
+sensitive and has live proof on bundled 0.166.0-alpha.5.1.
 
-For a tool-sandbox local IPC denial, request normal approval and retry the same
-callback once with unchanged IDs and payload. Stop before product work if linking
-is rejected/unavailable or the approved retry fails. Apply the same bounded retry
-to reads/outcomes, retain completed work if delivery fails, and never claim an
-unconfirmed note was delivered. Do not change grants or bypass policy.
+Legacy clipboard CLI preparation remains for compatibility, but is not the normal
+window flow. Old schema-1 records, UUIDs, updates and receipt reconciliation stay
+readable. Background model dispatch remains retired. Saved requests are never
+authorization to start work without an explicit Send.
 
-The prompt includes no automatic screenshots, other apps' contents or desktop
-inventory. Request JSON is descriptive input, not an override of execution policy.
-New folders follow the actual destination's applicable instructions; a missing
-origin-app workflow document in a separate project is not fabricated.
-
-## Shared module and compatibility
-
-The standalone Improvements Swift package owns the catalog, append-only updates,
-manual preparation state, prompt and chat links. `Modules/Improvements` is a pinned
-source snapshot with commit/hash provenance checked by `mise run validate`. Make
-shared changes in the canonical module, validate and sign a local commit, then
-update the snapshot through its vendor tool. Do not edit generated copies.
-
-Existing schema-1 requests, UUIDs, updates, linked chats and legacy background-run
-receipts remain readable. An old unlinked automatic handoff can become a manual
-preparation while keeping its token. Legacy receipt reconciliation never restarts
-a worker. Background dispatch remains retired.
-
-Builds 65–68 investigated an automatic deep-link route; composer previews and URL
-fixtures passed while sent chats could use the previous repository. Build 68
-confirmed the running app emitted the intended URL. The owner selected this manual
-workflow instead. The standalone module's `docs/routing-verification.md` retains
-the evidence. No shared routing chat or external desktop bridge is enabled.
+Shared source belongs in the standalone Improvements repository. The consumer's
+Modules/Improvements snapshot is generated, signed/pinned and integrity-checked.
+Tests use isolated provider/socket fixtures; do not use live data or clipboard in
+them. A synthetic direct-send marker passed in an existing desktop chat; complete
+consumer setup/callback and new-project visibility require their own live checks.
+Future app-context collection must be visible, bounded and owner-controlled.

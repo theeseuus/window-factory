@@ -43,7 +43,8 @@ enum ImprovementProjectCreation {
             guard !process.isRunning else {
                 throw AgentFailure("project_initialization_failed", "Git initialization timed out. The folder was preserved for inspection.")
             }
-            process.waitUntilExit()
+            // isRunning was already polled to completion; Foundation waitUntilExit
+            // can wait on a run-loop notification on a cooperative executor.
             guard process.terminationStatus == 0, FileManager.default.fileExists(atPath:url.appendingPathComponent(".git").path) else {
                 throw AgentFailure("project_initialization_failed", "Git initialization failed. The folder was preserved for inspection; no retry or deletion was performed.")
             }
